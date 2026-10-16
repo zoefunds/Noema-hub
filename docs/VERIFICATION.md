@@ -19,11 +19,11 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run build
 ```
 
-The direct suite covers authenticated callbacks, contribution necessity, candidate-independent verdict rejection, the executable 12-ID decisive bound, HTTP 2xx enforcement, requested-versus-verified provenance, manifest-root parity, timeout recovery, queue and lifetime bounds, internal-message error recovery, and exact finalized parent/child payout receipt matching for both credited and failed children. Frontend tests cover successful execution receipts, failed/non-final receipts, payout receipt matching, and pending record preservation.
+The current local run passed 38 direct contract tests and 13 frontend tests, plus frontend typecheck and optimized production build. Coverage includes authenticated callbacks, contribution necessity, candidate-independent verdict rejection, the executable 12-ID decisive bound, HTTP status handling, requested-versus-verified provenance, manifest-root parity, timeout recovery, queue and lifetime bounds, payout failure accounting, exact parent/child receipt matching, and the fixed-hash read-only payout gateway.
 
 At commit `d162a9922353c5de4194ee79d24a807818218413`, the same release commands passed locally: 19 direct contract tests, 3 frontend tests, both TypeScript checks, and the optimized Next.js production build. GitHub Actions run `38856609580` did not allocate a runner or execute a single step. Both jobs contain GitHub's annotation: `The job was not started because your account is locked due to a billing issue.` Restoring hosted CI therefore requires the repository owner to resolve the GitHub account billing lock; the workflow itself remains reproducible through the commands above.
 
-After the payout and HTTP retry changes, the same local gates passed again: 32 direct contract tests, 4 frontend tests, both TypeScript checks, and the optimized production build. The latest hosted run, [38865302473](https://github.com/zoefunds/Noema-hub/actions/runs/38865302473), again failed before either job started; GitHub's annotations explicitly say the account is locked due to a billing issue, and both jobs have zero steps. This is not a code/test failure, but hosted CI cannot be reported green until the repository owner resolves the account billing lock. The funded live lifecycle in this artifact was run through GenLayer JS, not through an injected browser wallet; the deployed browser flow now checks the outgoing child and persists pending verification state, but the browser-originated lifecycle remains unverified because desktop browser automation permissions were unavailable.
+The latest push, commit `6234074`, triggered [GitHub Actions run 38896311767](https://github.com/zoefunds/Noema-hub/actions/runs/38896311767). Both jobs failed before starting and report `steps: []`; there is no hosted green run to claim. Local gates passed in this environment: 38 contract tests, 13 frontend tests, typecheck, and production build. The funded lifecycle below was run through GenLayerJS, not initiated from a connected browser wallet.
 
 The published manifest parity vector is:
 
@@ -37,37 +37,38 @@ manifest root: 9f18409690f81c54c257d64c0e15572e7c77674afa5c7707de57e4411c87f000
 
 ## StudioNet resolution proof
 
-The current deployed addresses and exact source hashes are recorded in `deployments/studionet.json`. The fully completed live resolution is recorded in `deployments/e2e-studionet.json` for dossier `noema-4`; its exact finalized payout is also described below. Older deployment attempts and their incomplete states are historical records, not the current deployment or current acceptance result.
+The current deployed addresses and exact source hashes are recorded in `deployments/studionet.json`. The fully completed live resolution is recorded in `deployments/e2e-studionet.json` for dossier `noema-1`. Older deployment attempts and their incomplete states are historical records, not the current deployment or current acceptance result.
 
-The complete machine-readable record is in `deployments/e2e-studionet.json`. The final hardened deployment resolved a real public question using first-party files from the official `openai/codex` repository:
+The full harness log is retained in `deployments/e2e-studionet.json`; the concise, current-run acceptance proof is `deployments/studionet-e2e-latest.json`. The release resolved a real public question using first-party files from the official `openai/codex` repository:
 
 - dossier `noema-1`;
-- baseline transaction `0xd6cacc10849f2232e95cdb3e77ca7b89705ca240cf303dd7108560facd8a4d2f`;
-- commitment transaction `0xcfccc6b5c8796ee20e90899f23620f08e22f8dcfe88e81d3ae331133ba6bdb18`;
-- disclosure transaction `0xc1149846acb72d33d7f3e954756c5455bc6e7e4c3a704581033bb56ec540232b`;
+- sponsor/open transaction `0x08918cdf05c07eb8afb588517d88d9523a14cef68c4ab42aaa730b0d9ea30158`;
+- commitment transaction `0x4c78cf9747969dd0add21924df553d38bfdbfeb8de2b418b50165b0d13d14bac`;
+- disclosure transaction `0x53630d5c9944e4ea0793e89bf10cf1edbb934e1e008dba988e66f4599e1f9c83`;
 - outcome `POSITION_A`;
 - decisive IDs `["note-1"]`;
 - counterfactual outcome without `note-1`: `UNRESOLVED`;
-- researcher credit: `1100000000000000` atto GEN;
-- accounting invariant: true.
+- researcher credit before withdrawal: `1100000000000000` atto GEN; after: `0`;
+- accounting and solvency invariants after withdrawal: true;
+- duplicate withdrawal rejected; temporary sponsor's unused `0.002 GEN` swept with a finalized transaction.
 
 The candidate and baseline both have HTTP status 200 and content digests. Requested origin is recorded as requested provenance; authenticated canonical URL, publisher, redirect chain, and verified response origin remain empty because the current fetch interface does not prove them.
 
 ## Native payout proof
 
-The prior internal-message attempt on an earlier deployment failed and its callback was not observed. That failure motivated switching to the EVM recipient interface for EOAs, which the current official GenLayer documentation specifies for external chain-layer value transfers. The active payout deployment was then tested end to end:
+The prior internal-message attempt on an earlier deployment failed and its callback was not observed. That failure motivated switching to the EVM recipient interface for EOAs. The current payout and recovery path was tested end to end:
 
-- parent withdrawal `0x0770d17f04c2a805aef970769808f1f32e4cffeaa09c4866256bd4d2eb31121c` finalized with successful GenVM execution;
-- emitted child `0xf3b35e84c583474418c87a793c0214fedf09a0e315654447b1f7ef9eacab27d2` finalized with `value_credited=true`;
-- child recipient is `0x7452084e1cf767bf19c743051cff27d9f7a87a4d` and value is `1100000000000000` atto GEN;
-- recipient balance changed from `10029199999999999997` to `10030299999999999997` atto GEN;
-- Hub credit changed from `1100000000000000` to `0` and `accounting_ok=true`;
-- a second withdrawal with no credit was rejected.
+- parent withdrawal `0x05274e66eb4093cb16e48b1a7b8f3080bf92ff185a689ca91b67300456739120` finalized;
+- emitted child `0xc97a20a6510b2597b37545acecc77f4e8de9334c54faa77cc07727f5f2be2661` finalized with `value_credited=true`;
+- reconciliation transaction `0x610f43f82eb842592891fa3554d2ff73f728d705de3bd3eb1e3ae2705ea5a829` finalized with authoritative Hub status `DELIVERED` and exact parent/child IDs;
+- child recipient is `0x7401c129EDfc26E68FE19309fE461eb3Db1058Eb`; the transfer was exactly `1100000000000000` atto GEN;
+- recipient balance changed from `999000000999876277587324887999999998992` to `999000000999876277587325987999999998992` atto GEN;
+- Hub credit changed from `1100000000000000` to `0`; `accounting_ok=true`, `solvent_ok=true`, and a duplicate withdrawal was rejected.
 
 The earlier `0.0011 GEN` from Hub `0x49Cb…FcF3` is not recoverable through Noema: its old immutable Hub now reports zero credit, the child did not credit the EOA, and that deployment has no user-callable recovery method. The network record does not establish whether GenLayer operators can recover the value at protocol level. Full evidence is retained in `deployments/legacy-withdrawal-failure.json`.
 
-The existing deployed Hub remains immutable and has no payout-recovery method; its old failed credit therefore remains unrecoverable through that address. The updated source adds permissionless `reconcile_withdrawal`, which asks each validator to independently re-fetch the exact finalized StudioNet parent and child transaction records. It checks the parent sender, Hub destination, withdraw calldata, creation time, exact one-off recipient/value message, plus the child's parent link, sender, recipient, value, finality, and boolean `value_credited`. A verified failed child restores the user's claim and records any resulting backing shortfall; further withdrawals remain blocked until a sponsor recapitalizes the Hub. No timeout or user-directed re-credit is allowed.
+The freshly deployed Hub's `reconcile_withdrawal` asks each validator to independently fetch the exact finalized parent and child transaction records. It checks the parent sender, Hub destination, withdraw calldata, creation time, exact one-off recipient/value message, plus the child's parent link, sender, recipient, value, finality, and boolean `value_credited`. A verified failed child restores the user's claim and records any resulting backing shortfall; further withdrawals remain blocked until a sponsor recapitalizes the Hub. No timeout or user-directed re-credit is allowed.
 
-This is consensus-replayed evidence from the configured StudioNet RPC, not a cryptographic inclusion proof. Validators compare independently fetched records, but this design still depends on that RPC's integrity and availability; the new recovery code must be freshly deployed and its live failed-child branch exercised before it can be called an active recovery feature. The frontend source preserves pending receipts, submits reconciliation, and checks final Hub state and the wallet balance before reporting a successful payout.
+The contract uses the fixed-method `/api/payout-receipt` GET gateway because GenVM validators could not obtain a usable response from the public RPC's POST endpoint. The gateway accepts only a 32-byte hash and projects a bounded set of receipt fields; it has no write method or wallet credentials. This remains consensus-replayed provider data, not a cryptographic inclusion proof, and depends on both the Vercel gateway and StudioNet RPC. The delivered-child path was exercised live. The failed-child refund branch is covered by deterministic contract tests but has not been induced on-chain on this release.
 
-The deployed browser version distinguished parent success from actual child delivery by requiring a finalized credited child, wallet balance increase, and fresh Hub credit readback. The current source extends that flow with consensus reconciliation for delivered and failed child receipts. A desktop browser-originated full lifecycle was not exercised; the funded network lifecycle was executed through GenLayerJS.
+The production browser pages (Home, Field list, real-data dossier creation autofill, dossier detail, Method, and Vault) were smoke-tested against the new Hub; the health endpoint returned chain 61999, reachable RPC, and deployed Hub code. The funded transaction lifecycle was executed through GenLayerJS, not initiated by a connected browser wallet. Production payout parent and child receipt projections were also checked directly through the deployed API.

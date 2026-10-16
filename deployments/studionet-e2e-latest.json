@@ -1,0 +1,61 @@
+{
+  "network": "StudioNet",
+  "chainId": 61999,
+  "runStatus": "COMPLETE",
+  "startedAt": "2026-10-16T11:53:26.426Z",
+  "finishedAt": "2026-10-16T12:08:51.666Z",
+  "sourceCommit": "623407424e30e5b31daf842c82f3031ae34f8227",
+  "contracts": {
+    "hub": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+    "witness": "0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7",
+    "engine": "0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745"
+  },
+  "testQuestion": {
+    "dossierId": "noema-1",
+    "title": "OpenAI Codex default-branch license declaration",
+    "question": "Does the official openai/codex default-branch root LICENSE file expressly declare Apache License 2.0?",
+    "decision": "POSITION_A",
+    "decisiveEvidenceIds": ["note-1"],
+    "counterfactualWithoutDecisiveEvidence": "UNRESOLVED",
+    "manifestRoot": "98d5ee42a07d403772477c9f4477f81e0df648ef68ba748ef76f76e6c01ceeb6",
+    "baseline": {
+      "url": "https://api.github.com/repos/openai/codex/git/trees/main",
+      "httpStatus": 200,
+      "contentSha256": "71d883efa8d69e4f94099f7aebbcea35f098f603ca2567502878493887427497"
+    },
+    "decisiveSource": {
+      "url": "https://raw.githubusercontent.com/openai/codex/main/LICENSE",
+      "httpStatus": 200,
+      "claim": "The root LICENSE file begins with Apache License Version 2.0, January 2004, and states the Apache License's terms, so it explicitly declares Apache License 2.0.",
+      "contentSha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+    }
+  },
+  "transactions": {
+    "sponsorFunding": "0xc8fdf195264919e64404895b8597ae719c4d46fdcfa8a1c54878a84ea35188ab",
+    "openDossier": "0x08918cdf05c07eb8afb588517d88d9523a14cef68c4ab42aaa730b0d9ea30158",
+    "sealCommitment": "0x4c78cf9747969dd0add21924df553d38bfdbfeb8de2b418b50165b0d13d14bac",
+    "reveal": "0x53630d5c9944e4ea0793e89bf10cf1edbb934e1e008dba988e66f4599e1f9c83",
+    "withdrawalParent": "0x05274e66eb4093cb16e48b1a7b8f3080bf92ff185a689ca91b67300456739120",
+    "creditedChild": "0xc97a20a6510b2597b37545acecc77f4e8de9334c54faa77cc07727f5f2be2661",
+    "reconciliation": "0x610f43f82eb842592891fa3554d2ff73f728d705de3bd3eb1e3ae2705ea5a829",
+    "temporarySponsorSweep": "0x1ea738131b926836cae4057432a038fdc83447cac1dc10feb42bfd71f67b497f"
+  },
+  "payout": {
+    "amountAttoGen": "1100000000000000",
+    "receiptStatus": "FINALIZED",
+    "valueCredited": true,
+    "reconciliationStatus": "DELIVERED",
+    "hubCreditBeforeAttoGen": "1100000000000000",
+    "hubCreditAfterAttoGen": "0",
+    "researcherBalanceBeforeAttoGen": "999000000999876277587324887999999998992",
+    "researcherBalanceAfterAttoGen": "999000000999876277587325987999999998992",
+    "duplicateWithdrawalRejected": true,
+    "accountingInvariant": true,
+    "solvencyInvariant": true
+  },
+  "temporarySponsorSweep": {
+    "amountAttoGen": "2000000000000000",
+    "receiptStatus": "0x1"
+  },
+  "provenanceCaveat": "Requested URLs and response-body digests are recorded. GenVM does not prove the final HTTP response origin, so verified response origin and canonical URL are intentionally not asserted."
+}
