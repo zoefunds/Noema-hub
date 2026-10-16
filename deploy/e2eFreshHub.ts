@@ -28,12 +28,25 @@ function normalize(value: any): any {
 
 function readJson(file: string): any { return JSON.parse(readFileSync(file, "utf8")); }
 async function rawRpc(method: string, params: unknown[]): Promise<any> {
-  const response = await fetch(RPC_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-  if (!response.ok) throw new Error(`StudioNet RPC HTTP ${response.status} for ${method}`);
-  const payload: any = await response.json();
+  const payload: any = await retryTransient(`StudioNet ${method}`, async () => {
+    const response = await fetch(RPC_ENDPOINT, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }), signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) throw new Error(`StudioNet RPC HTTP ${response.status} for ${method}`);
+    return response.json();
+  });
   if (payload?.error) throw new Error(`StudioNet RPC ${method} failed: ${JSON.stringify(payload.error)}`);
   return payload?.result;
+}
+async function retryTransient<T>(label: string, operation: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await operation(); } catch (error) {
+      const message = String(error instanceof Error ? error.message : error).toLowerCase();
+      const temporary = /(fetch failed|econnreset|unexpected token|not valid json|429|502|503|504|rate limit|temporarily unavailable|aborted|timeout)/.test(message);
+      if (!temporary || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1_000 * 2 ** attempt, 10_000)));
+      if (attempt === attempts - 1) console.warn(`${label} is still retrying after a transient StudioNet RPC failure.`);
+    }
+  }
 }
 function saveRun(update: Record<string, unknown>): void {
   const current = existsSync(E2E_PATH) ? readJson(E2E_PATH) : {};
@@ -62,15 +75,15 @@ function assertSuccess(receipt: any, operation: string): void {
 
 async function write(client: GenLayerClient<any>, address: `0x${string}`, method: string, args: unknown[] = [], value = 0n): Promise<string> {
   const hash = await client.writeContract({ address, functionName: method, args: args as any[], value });
-  const receipt = await client.waitForTransactionReceipt({ hash: hash as TransactionHash,
-    status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 } as any);
+  const receipt = await retryTransient(`${method} finality`, () => client.waitForTransactionReceipt({ hash: hash as TransactionHash,
+    status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 } as any));
   assertSuccess(receipt, method);
   return String(hash);
 }
 
 async function read(client: GenLayerClient<any>, address: `0x${string}`, method: string, args: unknown[] = [], latest = true): Promise<any> {
-  return normalize(await client.readContract({ address, functionName: method, args: args as any[],
-    transactionHashVariant: latest ? TransactionHashVariant.LATEST_NONFINAL : TransactionHashVariant.LATEST_FINAL } as any));
+  return normalize(await retryTransient(`${method} read`, () => client.readContract({ address, functionName: method, args: args as any[],
+    transactionHashVariant: latest ? TransactionHashVariant.LATEST_NONFINAL : TransactionHashVariant.LATEST_FINAL } as any)));
 }
 
 async function waitForDossier(client: GenLayerClient<any>, hub: `0x${string}`, id: string,
@@ -294,8 +307,8 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     } else if (!withdrawalTx) {
       throw new Error("Researcher credit is zero but no prior withdrawal transaction was recorded");
     }
-    const child: any = await researcherClient.waitForTransactionReceipt({ hash: childHash as TransactionHash,
-      status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 } as any);
+    const child: any = await retryTransient("native payout child finality", () => researcherClient.waitForTransactionReceipt({ hash: childHash as TransactionHash,
+      status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 } as any));
     const childStatus = String(child?.statusName ?? child?.status_name ?? "").toUpperCase();
     const execution = String(child?.txExecutionResultName ?? child?.tx_execution_result_name ?? "").toUpperCase();
     const recipient = String(child?.to_address ?? child?.recipient ?? "").toLowerCase();
