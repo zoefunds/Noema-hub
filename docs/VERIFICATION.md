@@ -1,74 +1,68 @@
 # Verification record
 
-This record separates reproducible deterministic checks from public-network observations. A finalized transaction is counted as successful only when its GenVM execution result is also successful and the expected state is read back from the contract.
+This document separates deterministic checks from public-network evidence. A transaction counts as a successful payout only when its finalized execution result, child transfer, wallet balance delta, and authoritative Hub state all agree.
 
-## Reproduce locally
+## Reproduce the local checks
 
 Run from the repository root with Python 3.12+ and Node.js 20+:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python -m pytest tests/direct -q
-
-npm ci
-npx tsc --noEmit
-
-npm --prefix frontend ci
-npm --prefix frontend test
-npm --prefix frontend run typecheck
-npm --prefix frontend run build
+npm install
+npm run test:sponsor-key
+npm run test:ui
+npm run typecheck
+npm run build
 ```
 
-The current local run passed 43 direct contract tests, 13 frontend tests, and 4 signer-safety tests, plus frontend typecheck and optimized production build. Coverage includes authenticated callbacks, contribution necessity, candidate-independent verdict rejection, the executable 12-ID decisive bound, direct SourceWitness HTTP 429/503/404 response handling (including a valid-looking body on an error status), bond retry/refund behavior, requested-versus-verified provenance, manifest-root parity, timeout recovery, queue and lifetime bounds, serialized per-recipient withdrawals, payout failure accounting, exact parent/child receipt matching, and the fixed-hash read-only payout gateway.
+The latest verified local run passed 43 direct contract tests, 4 sponsor-key safety tests, and 13 frontend tests. Frontend TypeScript checking and optimized production build also passed. Contract coverage includes authenticated callbacks, current-candidate necessity and counterfactual resolution, the executable 12-ID decisive bound, temporary HTTP 429/503 classification, permanent missing-source handling, valid-looking document bodies on unsuccessful responses, retryable bond return on source unavailability, manifest-root parity, timeout recovery, queue and lifetime bounds, serialized pending withdrawals, payout-loss accounting, and exact parent/child payout receipt matching.
 
-At commit `d162a9922353c5de4194ee79d24a807818218413`, the same release commands passed locally: 19 direct contract tests, 3 frontend tests, both TypeScript checks, and the optimized Next.js production build. GitHub Actions run `38856609580` did not allocate a runner or execute a single step. Both jobs contain GitHub's annotation: `The job was not started because your account is locked due to a billing issue.` Restoring hosted CI therefore requires the repository owner to resolve the GitHub account billing lock; the workflow itself remains reproducible through the commands above.
+The GitHub Actions workflow is `.github/workflows/quality.yml`. Its last inspected run for commit `a93db04d6312e98ac4d4f97f5454f65ce54a6986` was run `38900526991`; GitHub did not start job steps and reported the account billing lock. No hosted green result is claimed. A fresh status could not be obtained on 2026-10-16 because this environment could not resolve `github.com`; local workflow-equivalent checks passed as listed above. This historical CI limitation should be replaced with a verified run link after GitHub access and billing are restored.
 
-The release-record push, commit `4ff60e6`, triggered [GitHub Actions run 38899527179](https://github.com/zoefunds/Noema-hub/actions/runs/38899527179). Both jobs failed before starting and report `steps: []`; there is no hosted green run to claim. The later test-only HTTP adversarial additions passed locally: 42 contract tests, 13 frontend tests, 4 signer-safety tests, typecheck, and production build. The funded lifecycle below was run through GenLayerJS, not initiated from a connected browser wallet.
+## Current StudioNet deployment
 
-The published manifest parity vector is:
+The deployed release source commit is `623407424e30e5b31daf842c82f3031ae34f8227`. The authoritative manifest is [`deployments/studionet.json`](../deployments/studionet.json). It records these StudioNet chain 61999 contracts and exact source-hash matches retrieved through GenLayerJS `getContractCode`:
 
-```text
-dossier: noema-1
-evidence: base-1, note-1
-manifest root: 9f18409690f81c54c257d64c0e15572e7c77674afa5c7707de57e4411c87f000
-```
+| Contract | Address | Deployed source SHA-256 | Match |
+|---|---|---|---|
+| NoemaHub | `0x52282B21156C22d1800d0302Ea1e0FFc4De637BF` | `cdbc1a23af6a2b60b6a4ed3030dfb11bd12ee05109df6b9b6cf4d758f0b9ce79` | yes |
+| SourceWitness | `0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7` | `0f4ef7d4cc9b7b73ac98bed4d207b1240a1f0854f775e30b874e8e520b376a33` | yes |
+| VerdictEngine | `0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745` | `7085da39128709f465d30b3fce9988b21fecff9b17d2edc624305e5a625ce026` | yes |
 
-`contracts/domain.py`, `NoemaHub`, and `VerdictEngine` all hash the same canonical evidence array directly.
+The deployed contract files have no changes between that source commit and the current repository `HEAD`. The concise StudioNet execution record is [`deployments/studionet-e2e-latest.json`](../deployments/studionet-e2e-latest.json); the larger `deployments/e2e-studionet.json` is a historical, verbose harness log and is not the source of current deployment addresses.
 
-## StudioNet resolution proof
+## Real StudioNet research and payout run
 
-The current deployed addresses and exact source hashes are recorded in `deployments/studionet.json`. The fully completed live resolution is recorded in `deployments/e2e-studionet.json` for dossier `noema-1`. Older deployment attempts and their incomplete states are historical records, not the current deployment or current acceptance result.
+The concise record documents a completed CLI/GenLayerJS run against the deployed Hub, using official OpenAI Codex public sources:
 
-The full harness log is retained in `deployments/e2e-studionet.json`; the concise, current-run acceptance proof is `deployments/studionet-e2e-latest.json`. The release resolved a real public question using first-party files from the official `openai/codex` repository:
+- dossier `noema-1` asks whether the default-branch root `LICENSE` expressly declares Apache License 2.0;
+- baseline Git tree request: `https://api.github.com/repos/openai/codex/git/trees/main`, HTTP 200, body digest `71d883efa8d69e4f94099f7aebbcea35f098f603ca2567502878493887427497`;
+- decisive source: `https://raw.githubusercontent.com/openai/codex/main/LICENSE`, HTTP 200, body digest `d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc`;
+- outcome `POSITION_A`, decisive evidence `note-1`, and counterfactual without `note-1` `UNRESOLVED`; manifest root `98d5ee42a07d403772477c9f4477f81e0df648ef68ba748ef76f76e6c01ceeb6`;
+- sponsor funding `0xc8fdf195264919e64404895b8597ae719c4d46fdcfa8a1c54878a84ea35188ab`; dossier opening `0x08918cdf05c07eb8afb588517d88d9523a14cef68c4ab42aaa730b0d9ea30158`; commitment seal `0x4c78cf9747969dd0add21924df553d38bfdbfeb8de2b418b50165b0d13d14bac`; disclosure `0x53630d5c9944e4ea0793e89bf10cf1edbb934e1e008dba988e66f4599e1f9c83`;
+- reward plus returned bond credited to the researcher: `1100000000000000` atto GEN (`0.0011 GEN`);
+- withdrawal parent `0x05274e66eb4093cb16e48b1a7b8f3080bf92ff185a689ca91b67300456739120`; finalized child `0xc97a20a6510b2597b37545acecc77f4e8de9334c54faa77cc07727f5f2be2661`, recipient `0x7401c129EDfc26E68FE19309fE461eb3Db1058Eb`, exact value `1100000000000000` atto GEN, `value_credited=true`;
+- recipient balance moved from `999000000999876277587324887999999998992` to `999000000999876277587325987999999998992` atto GEN, an exact increase of `1100000000000000`;
+- reconciliation `0x610f43f82eb842592891fa3554d2ff73f728d705de3bd3eb1e3ae2705ea5a829` read back `DELIVERED` with the exact parent and child IDs; Hub credit moved from `1100000000000000` to `0`; accounting and solvency remained true; duplicate withdrawal was rejected;
+- a separate finalized transaction returned the temporary sponsor's unused `0.002 GEN`; it is not part of the recipient's payout delta.
 
-- dossier `noema-1`;
-- sponsor/open transaction `0x08918cdf05c07eb8afb588517d88d9523a14cef68c4ab42aaa730b0d9ea30158`;
-- commitment transaction `0x4c78cf9747969dd0add21924df553d38bfdbfeb8de2b418b50165b0d13d14bac`;
-- disclosure transaction `0x53630d5c9944e4ea0793e89bf10cf1edbb934e1e008dba988e66f4599e1f9c83`;
-- outcome `POSITION_A`;
-- decisive IDs `["note-1"]`;
-- counterfactual outcome without `note-1`: `UNRESOLVED`;
-- researcher credit before withdrawal: `1100000000000000` atto GEN; after: `0`;
-- accounting and solvency invariants after withdrawal: true;
-- duplicate withdrawal rejected; temporary sponsor's unused `0.002 GEN` swept with a finalized transaction.
+The recorded research-and-payout run above was initiated with the GenLayerJS CLI, not from the browser wallet. A separate browser-wallet dossier-creation and baseline run is now recorded in [`deployments/studionet-browser-wallet-verification.json`](../deployments/studionet-browser-wallet-verification.json). Studio Explorer confirms the EOA sender `0x6f0b4cE7a1872db132b2F6B7743deFb30eBa698a`, a finalized `open_dossier` call carrying 10 GEN and returning `noema-2`, and the complete finalized baseline attestation/verdict callback chain. The production page independently reads `noema-2` as `OPEN`, with one baseline evidence record, the 10 GEN reward, a 0.1 GEN bond, and `UNRESOLVED` baseline result.
 
-The candidate and baseline both have HTTP status 200 and content digests. Requested origin is recorded as requested provenance; authenticated canonical URL, publisher, redirect chain, and verified response origin remain empty because the current fetch interface does not prove them.
+This browser evidence proves wallet-originated dossier funding/creation and baseline processing, but it does not prove a browser-originated research reward or withdrawal. No disclosure or withdrawal hash was provided in this browser run. The separate CLI payout record remains the only current end-to-end reward-to-EOA proof; keep these two evidence scopes distinct.
 
-## Native payout proof
+## Withdrawal failure and recovery
 
-The prior internal-message attempt on an earlier deployment failed and its callback was not observed. That failure motivated switching to the EVM recipient interface for EOAs. The current payout and recovery path was tested end to end:
+The earlier `0.0011 GEN` withdrawal on legacy Hub `0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3` is not recoverable through that immutable contract: the legacy Hub shows zero credit, its child did not credit the EOA, and it has no callable authenticated recovery method. Whether protocol operators can recover the value is unknown. See [`deployments/legacy-withdrawal-failure.json`](../deployments/legacy-withdrawal-failure.json). This is separate from the current successful payout above.
 
-- parent withdrawal `0x05274e66eb4093cb16e48b1a7b8f3080bf92ff185a689ca91b67300456739120` finalized;
-- emitted child `0xc97a20a6510b2597b37545acecc77f4e8de9334c54faa77cc07727f5f2be2661` finalized with `value_credited=true`;
-- reconciliation transaction `0x610f43f82eb842592891fa3554d2ff73f728d705de3bd3eb1e3ae2705ea5a829` finalized with authoritative Hub status `DELIVERED` and exact parent/child IDs;
-- child recipient is `0x7401c129EDfc26E68FE19309fE461eb3Db1058Eb`; the transfer was exactly `1100000000000000` atto GEN;
-- recipient balance changed from `999000000999876277587324887999999998992` to `999000000999876277587325987999999998992` atto GEN;
-- Hub credit changed from `1100000000000000` to `0`; `accounting_ok=true`, `solvent_ok=true`, and a duplicate withdrawal was rejected.
+On the current deployment, `withdraw()` serializes a recipient's pending outbound transfer. `reconcile_withdrawal` independently fetches the exact finalized parent/child pair through the fixed-method receipt gateway and only marks delivery after validating the recipient, amount, sender, parent link, finality, and `value_credited`. A verified failed child restores claimable credit and records a backing shortfall; later withdrawals are blocked until recapitalization restores solvency. No timeout-only re-credit is allowed. The delivered-child path is proven live. The failed-child recovery branch and invalid/unavailable receipt cases are covered deterministically but have not been induced on-chain on this release.
 
-The earlier `0.0011 GEN` from Hub `0x49Cb…FcF3` is not recoverable through Noema: its old immutable Hub now reports zero credit, the child did not credit the EOA, and that deployment has no user-callable recovery method. The network record does not establish whether GenLayer operators can recover the value at protocol level. Full evidence is retained in `deployments/legacy-withdrawal-failure.json`.
+The gateway at `/api/payout-receipt` is read-only and accepts a transaction hash, returning a bounded receipt projection from StudioNet RPC. Validator consensus replays the gateway data; it is not a cryptographic inclusion proof and depends on both the gateway and RPC availability.
 
-The freshly deployed Hub's `reconcile_withdrawal` asks each validator to independently fetch the exact finalized parent and child transaction records. It checks the parent sender, Hub destination, withdraw calldata, creation time, exact one-off recipient/value message, plus the child's parent link, sender, recipient, value, finality, and boolean `value_credited`. A verified failed child restores the user's claim and records any resulting backing shortfall; further withdrawals remain blocked until a sponsor recapitalizes the Hub. No timeout or user-directed re-credit is allowed.
+## HTTP failure handling and provenance limits
 
-The contract uses the fixed-method `/api/payout-receipt` GET gateway because GenVM validators could not obtain a usable response from the public RPC's POST endpoint. The gateway accepts only a 32-byte hash and projects a bounded set of receipt fields; it has no write method or wallet credentials. This remains consensus-replayed provider data, not a cryptographic inclusion proof, and depends on both the Vercel gateway and StudioNet RPC. The delivered-child path was exercised live. The failed-child refund branch is covered by deterministic contract tests but has not been induced on-chain on this release.
+SourceWitness classifies temporary statuses including HTTP 429 and 503 as `UNAVAILABLE`; NoemaHub returns the researcher bond and marks that submission retryable rather than awarding the bond to the sponsor. Permanent missing-source responses such as 404 are rejected under policy. A document-looking response body cannot override a non-success HTTP status. These branches are covered by direct tests.
 
-The production browser pages (Home, Field list, real-data dossier creation autofill, dossier detail, Method, and Vault) were smoke-tested against the new Hub; the health endpoint returned chain 61999, reachable RPC, and deployed Hub code. The funded transaction lifecycle was executed through GenLayerJS, not initiated by a connected browser wallet. Production payout parent and child receipt projections were also checked directly through the deployed API.
+The records bind the requested URL, HTTP status, response-body digest, claim digest, and observation time. The runtime does not prove the final response origin, redirect chain, or publisher identity; these fields are intentionally not represented as authenticated provenance.
+
+The published manifest parity vector is also covered by a test: dossier `noema-1`, evidence `base-1` and `note-1`, canonical manifest root `9f18409690f81c54c257d64c0e15572e7c77674afa5c7707de57e4411c87f000`.

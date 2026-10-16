@@ -1,0 +1,132 @@
+{
+  "network": "StudioNet",
+  "chainId": 61999,
+  "verificationDate": "2026-10-16",
+  "verificationScope": "Browser-wallet dossier creation and baseline witness/decision lifecycle",
+  "browserWalletInitiated": true,
+  "walletAddress": "0x6f0b4cE7a1872db132b2F6B7743deFb30eBa698a",
+  "contracts": {
+    "hub": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+    "sourceWitness": "0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7",
+    "verdictEngine": "0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745"
+  },
+  "dossier": {
+    "id": "noema-2",
+    "title": "OpenAI Codex default-branch license declaration 2",
+    "question": "Does the official openai/codex default-branch root LICENSE file expressly declare Apache License 2.0?",
+    "decisionRule": "Choose Position A only when the root LICENSE file served from the official openai/codex default branch explicitly names Apache License Version 2.0. Choose Position B only when that official file explicitly names another license or explicitly states that no license applies. If the official document does not establish either condition, leave the dossier unresolved.",
+    "positionA": "Apache-2.0 declared",
+    "positionB": "Apache-2.0 not declared",
+    "sourcePolicy": "Accept only the official openai/codex default-branch tree metadata from api.github.com and document text from raw.githubusercontent.com/openai/codex/main. Exclude forks, mirrors, reposts, social media, search snippets, and third-party summaries.",
+    "baseline": {
+      "url": "https://api.github.com/repos/openai/codex/git/trees/main",
+      "claim": "The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text.",
+      "httpStatus": 200,
+      "contentSha256": "71d883efa8d69e4f94099f7aebbcea35f098f603ca2567502878493887427497",
+      "claimSha256": "ce3931796c21521bcf9c4d9119ea9ce07dac00542196662171c6fd6fa49991f5"
+    },
+    "stateAfterBaseline": {
+      "status": "OPEN",
+      "decision": "UNRESOLVED",
+      "manifestRoot": "1eb2afb52ff779a1c919cfca10d392a14553dedaaa372c5d840419e791a846d9",
+      "evidenceCount": 1,
+      "evidenceLimit": 18,
+      "lifetimeDisclosures": 0,
+      "lifetimeDisclosureLimit": 72,
+      "activeDisclosures": 0,
+      "rewardGen": "10",
+      "researcherBondGen": "0.1",
+      "readback": "Production dossier page /field/noema-2"
+    }
+  },
+  "transactions": [
+    {
+      "role": "browser-wallet dossier creation and funding",
+      "hash": "0x4afc0113cddb648bb4d3d84a8d2fd27947fb0d7342ffd2b3f21dbf61910c530b",
+      "method": "open_dossier",
+      "from": "0x6f0b4cE7a1872db132b2F6B7743deFb30eBa698a",
+      "to": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "valueGen": "10",
+      "result": "noema-2",
+      "status": "FINALIZED",
+      "genvmExecution": "SUCCESS",
+      "createdAtLocal": "2026-10-16 13:32:43 Africa/Lagos",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0x4afc0113cddb648bb4d3d84a8d2fd27947fb0d7342ffd2b3f21dbf61910c530b"
+    },
+    {
+      "role": "Hub requests baseline source attestation",
+      "hash": "0xa3de2f08f9254df40f6d8b5acc9d9f08df6fc39725503027d88b7a1e03011356",
+      "method": "attest",
+      "requestId": "baseline:noema-2:0",
+      "from": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "to": "0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7",
+      "valueGen": "0",
+      "status": "FINALIZED",
+      "genvmExecution": "SUCCESS",
+      "attestedStatus": "ATTESTED",
+      "httpStatus": 200,
+      "contentSha256": "71d883efa8d69e4f94099f7aebbcea35f098f603ca2567502878493887427497",
+      "createdAtLocal": "2026-10-16 13:33:23 Africa/Lagos",
+      "parent": "0x4afc0113cddb648bb4d3d84a8d2fd27947fb0d7342ffd2b3f21dbf61910c530b",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0xa3de2f08f9254df40f6d8b5acc9d9f08df6fc39725503027d88b7a1e03011356"
+    },
+    {
+      "role": "SourceWitness returns baseline attestation",
+      "hash": "0x1e60bbac4400ab48946cb0382c92b970f2d8ee8bb2719c288c440f55f2e49d4e",
+      "method": "record_attestation",
+      "requestId": "baseline:noema-2:0",
+      "from": "0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7",
+      "to": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "valueGen": "0",
+      "status": "FINALIZED",
+      "genvmExecution": "SUCCESS",
+      "createdAtLocal": "2026-10-16 13:34:28 Africa/Lagos",
+      "parent": "0xa3de2f08f9254df40f6d8b5acc9d9f08df6fc39725503027d88b7a1e03011356",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0x1e60bbac4400ab48946cb0382c92b970f2d8ee8bb2719c288c440f55f2e49d4e"
+    },
+    {
+      "role": "Hub requests baseline rule evaluation",
+      "hash": "0x7248c692c84b6b11c4327c52f57408f416654455f32fa33c295e4bd9a7e6d7b0",
+      "method": "resolve",
+      "requestId": "baseline-verdict:noema-2",
+      "from": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "to": "0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745",
+      "valueGen": "0",
+      "status": "FINALIZED",
+      "genvmExecution": "SUCCESS",
+      "outcome": "UNRESOLVED",
+      "sufficient": false,
+      "createdAtLocal": "2026-10-16 13:35:02 Africa/Lagos",
+      "parent": "0x1e60bbac4400ab48946cb0382c92b970f2d8ee8bb2719c288c440f55f2e49d4e",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0x7248c692c84b6b11c4327c52f57408f416654455f32fa33c295e4bd9a7e6d7b0"
+    },
+    {
+      "role": "VerdictEngine returns unresolved baseline decision",
+      "hash": "0x2e4cc59d821e1bca5ecc779ee7bc1d38b4104847dcc3629c5bbc8acfda72c925",
+      "method": "record_verdict",
+      "requestId": "baseline-verdict:noema-2",
+      "from": "0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745",
+      "to": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "valueGen": "0",
+      "status": "FINALIZED",
+      "genvmExecution": "SUCCESS",
+      "outcome": "UNRESOLVED",
+      "sufficient": false,
+      "manifestRoot": "1eb2afb52ff779a1c919cfca10d392a14553dedaaa372c5d840419e791a846d9",
+      "createdAtLocal": "2026-10-16 13:35:56 Africa/Lagos",
+      "parent": "0x7248c692c84b6b11c4327c52f57408f416654455f32fa33c295e4bd9a7e6d7b0",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0x2e4cc59d821e1bca5ecc779ee7bc1d38b4104847dcc3629c5bbc8acfda72c925"
+    }
+  ],
+  "limitations": {
+    "scope": "This verifies browser-wallet dossier funding/creation and the full baseline witness-to-unresolved-verdict path.",
+    "notProven": [
+      "researcher commitment and disclosure from the browser wallet",
+      "research reward attribution in this dossier",
+      "browser-originated withdrawal parent and finalized child payout",
+      "before-and-after recipient wallet balance for this browser run",
+      "duplicate withdrawal rejection for this browser-run dossier"
+    ],
+    "note": "The separate CLI/GenLayerJS payout proof is recorded in deployments/studionet-e2e-latest.json. Do not treat this dossier-creation run as browser-originated payout evidence."
+  }
+}

@@ -21,7 +21,9 @@
 - A resolved verdict names at most 12 existing, unique decisive IDs, includes the current candidate, and is unresolved without it.
 - Component addresses have no post-bootstrap setter.
 - No administrator can seize funds, replace a verdict, or bypass the queue.
-- All transfers use pull credits.
+- Rewards and returned bonds first become pull credits; a recipient must explicitly call `withdraw` to initiate the native payout.
+- A recipient cannot overwrite an unresolved withdrawal with another. Pending outbound value remains tracked until exact finalized parent/child receipts are reconciled.
+- A delivered payout is terminal and cannot be claimed a second time. A verified failed child restores the claim but records any backing loss and blocks further payouts until recapitalization.
 
 ## Prompt injection
 
@@ -31,7 +33,7 @@ Contract prompts label all dossier and web content as untrusted data and instruc
 
 An HTTPS response proves the bytes validators fetched for a requested URL at their observation time, not the publisher identity, final response origin, or redirect chain. Noema stores the normalized requested origin separately, leaves verified response provenance empty when GenVM does not expose it, and stores a content digest for later comparison. Only 2xx responses are semantically evaluated.
 
-Dynamic resources can vary between validators. Such instability may prevent consensus. Researchers should prefer first-party records with stable content and durable URLs.
+Temporary source unavailability (including HTTP 429 and 5xx statuses) is treated as retryable and returns the researcher bond; it is not treated as a substantive policy rejection. Permanent missing-source responses such as 404 are rejected. A successful-looking body on a non-success status is never accepted as documentary evidence. Dynamic resources can vary between validators. Such instability may prevent consensus. Researchers should prefer first-party records with stable content and durable URLs.
 
 ## Denial of service controls
 
@@ -44,6 +46,7 @@ All user text, arrays, pages, queues, lifetime records and retained evidence are
 - deploy both workers bound to that exact Hub;
 - configure the Hub once with both worker addresses;
 - inspect all three schemas;
-- verify `accounting_ok` before and after an end-to-end flow;
+- verify `accounting_ok` and `solvent_ok` before and after an end-to-end flow;
+- verify the finalized outgoing child, recipient balance increase, Hub credit readback, and duplicate-withdraw protection before reporting a payout as successful;
 - publish addresses and deployment transaction hashes;
 - never label a transport redirect chain as verified.

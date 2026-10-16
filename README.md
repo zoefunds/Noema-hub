@@ -130,13 +130,14 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 
 ## Verified Studionet release
 
-- Hub: `0x6592007a9e33CbFD99A62e0979a71149CF6684B4`
-- SourceWitness: `0x6d04F2a47B6a2EE5128a87A839127Fdcf0E15b28`
-- VerdictEngine: `0x16262D365832F73Fdc4095e4942872166fdF39E0`
+- Hub: `0x52282B21156C22d1800d0302Ea1e0FFc4De637BF`
+- SourceWitness: `0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7`
+- VerdictEngine: `0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745`
+- deployed source commit: `623407424e30e5b31daf842c82f3031ae34f8227`
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
 
-Native withdrawals use the EVM recipient interface and external finalized value messages. The production UI verifies the child receipt, exact recipient and amount, `value_credited`, the recipient wallet balance delta, and the Hub credit readback before reporting payment. The verified live withdrawal and duplicate rejection are recorded in `deployments/e2e-studionet.json`.
+Native withdrawals use the EVM recipient interface and external finalized value messages. The production UI verifies the child receipt, exact recipient and amount, `value_credited`, the recipient wallet balance delta, and the Hub credit readback before reporting payment. The CLI-originated StudioNet payout proof is recorded in `deployments/studionet-e2e-latest.json`. The browser-wallet dossier creation and baseline flow is recorded separately in `deployments/studionet-browser-wallet-verification.json`; it verifies wallet-funded dossier creation but is not a browser-originated payout proof.
 
-The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The complete public-network run is preserved in `deployments/e2e-studionet.json`.
+The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The deployment source hashes and transaction IDs are in `deployments/studionet.json`; `deployments/e2e-studionet.json` is a verbose runner log and may include historical attempts. Use the concise release record for current acceptance claims.
