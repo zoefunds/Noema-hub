@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSuccessfulReceipt, disclosureCommitment } from "./liveProtocol";
+import { assertSuccessfulReceipt, disclosureCommitment, isVerifiedNativeTransfer } from "./liveProtocol";
 
 describe("disclosure commitment", () => {
   const input = { dossierId: "noema-7", url: "https://example.org/report", claim: "The release shipped.", salt: "ab".repeat(32) };
@@ -26,5 +26,17 @@ describe("GenVM receipt acceptance", () => {
       { mode: "leader", execution_result: "SUCCESS", result: { status: "error" } },
     ] } })).toThrow(/execution failed/);
     expect(() => assertSuccessfulReceipt({ statusName: "Accepted", txExecutionResultName: "FinishedWithReturn" })).toThrow(/execution failed/);
+  });
+});
+
+describe("native payout acceptance", () => {
+  const recipient = `0x${"7".repeat(40)}`;
+  const child = { status_name: "FINALIZED", to_address: recipient, value: 1_100_000_000_000_000n, value_credited: true };
+  it("requires a finalized credited child to the exact recipient and amount", () => {
+    expect(isVerifiedNativeTransfer(child, recipient, 1_100_000_000_000_000n)).toBe(true);
+    expect(isVerifiedNativeTransfer({ ...child, value_credited: false }, recipient, 1_100_000_000_000_000n)).toBe(false);
+    expect(isVerifiedNativeTransfer({ ...child, status_name: "ERROR" }, recipient, 1_100_000_000_000_000n)).toBe(false);
+    expect(isVerifiedNativeTransfer({ ...child, to_address: `0x${"8".repeat(40)}` }, recipient, 1_100_000_000_000_000n)).toBe(false);
+    expect(isVerifiedNativeTransfer({ ...child, value: 5n }, recipient, 1_100_000_000_000_000n)).toBe(false);
   });
 });

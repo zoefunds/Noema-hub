@@ -42,11 +42,11 @@ The currently verified Studionet deployment is:
 
 | Component | Address | Deployment transaction |
 |---|---|---|
-| NoemaHub | `0x8AF8731fC1143010dD9b21e8B357A0Ca9D1644b6` | `0x4f85531f0d2f72390e475f3e9b3ed166578fd72315c74a38271959025ab511c2` |
-| SourceWitness | `0x366815EC7f963786E8A0d6Ec7c10bb38aE989D0b` | `0x6d8a2f5af69b505ed32a7122db18e5541f52e2e918657d3acf37a3150616e4fd` |
-| VerdictEngine | `0x3baDCAf04b067B212Cd51fBf8FA95ef8DC209796` | `0xa594579e628974bc7e0fc8a48830a8416cd45803af882264ce2078a7faacc86c` |
+| NoemaHub | `0x6592007a9e33CbFD99A62e0979a71149CF6684B4` | `0x8c36b3fa54bb20d27b0a3b78b14143a5d0650a6182ea273e497b56cb86c9fd1d` |
+| SourceWitness | `0x6d04F2a47B6a2EE5128a87A839127Fdcf0E15b28` | `0xb3adc6f25a719c22045068c4af8b748ecf7a0803dfff7979942fe231929967b3` |
+| VerdictEngine | `0x16262D365832F73Fdc4095e4942872166fdF39E0` | `0x03069d4bfccf5c97c15cbd1d6d34a2dc59deaa16e77da3862e058d2355bbce0b` |
 
-The one-time binding transaction is `0x824eba1f16717e10b2037c6e91b4ca66e6b82ff0ea3338a7aefd2473bdc93f74`. This release has native payouts disabled at the Hub until StudioNet proves EOA transfer delivery.
+The one-time binding transaction is `0x987e8bcb6d3d76aa494d2c6b1317d8d75f8915789404bd66ab0353b68bfbe934`. This release enables native payouts through the EVM recipient interface. The exact deployed sources are verified against RPC-returned code in `deployments/studionet.json`.
 
 ## Real-network acceptance test
 
@@ -60,8 +60,8 @@ genlayer account use eventweaver
 NOEMA_E2E_PHASE=research genlayer deploy
 ```
 
-The verified run created `noema-1`, sealed and revealed `note-1`, fetched the official README and LICENSE, resolved `POSITION_A`, credited the researcher `0.0011 GEN`, and ended with `accounting_ok=true`. Transaction hashes, provenance digests, manifest roots, decisive IDs, and the final records are stored in `deployments/e2e-studionet.json`.
+The verified run created `noema-1`, sealed and revealed `note-1`, fetched the official README and LICENSE, resolved `POSITION_A`, credited the researcher `0.0011 GEN`, and ended with `accounting_ok=true`. Parent withdrawal `0x0770d17f04c2a805aef970769808f1f32e4cffeaa09c4866256bd4d2eb31121c` emitted finalized child `0xf3b35e84c583474418c87a793c0214fedf09a0e315654447b1f7ef9eacab27d2` with `value_credited=true`. The wallet increased by exactly 0.0011 GEN, Hub credit became zero, and a duplicate withdrawal was rejected. Transaction hashes, provenance digests, manifest roots, decisive IDs, and the final records are stored in `deployments/e2e-studionet.json`.
 
-The verdict records `contribution_required=true` and `counterfactual_outcome=UNRESOLVED`. A withdrawal was also exercised. Parent transaction `0xfe3b…6877` finalized successfully and emitted child `0xbc70…b744` for `0.0011 GEN`, but StudioNet finalized the child with `Contract <researcher EOA> not found`, `value_credited=false`, and no recipient balance increase. Native payout is therefore paused in production and is not claimed as complete. The full failure record is retained in the same artifact for runtime maintainers.
+An earlier internal-message withdrawal attempt on a prior deployment failed because an EOA was treated as an Intelligent Contract. The current deployment uses the documented EVM recipient interface and has a successful finalized external payout, with complete parent/child receipts in the acceptance artifact.
 
-The frontend is deployed at [neoma-hub.vercel.app](https://neoma-hub.vercel.app). Its `/api/health` endpoint verifies the RPC, chain ID, and configured Hub.
+The frontend is deployed at [neoma-hub.vercel.app](https://neoma-hub.vercel.app). Its `/api/health` endpoint verifies the RPC, chain ID, and configured Hub. Browser withdrawals also verify the child receipt and actual wallet balance change after the parent finalizes.

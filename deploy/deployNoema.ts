@@ -36,7 +36,8 @@ export default async function main(client: GenLayerClient<any>) {
 
   // StudioNet currently rejects contract-originated value messages to EOAs.
   // Preserve credits and reject withdrawal at contract level on this release.
-  const hub = await deploy(client, "contracts/noema_hub.py", ["", "", false]);
+  const enableNativePayouts = process.env.NOEMA_ENABLE_NATIVE_PAYOUTS === "1";
+  const hub = await deploy(client, "contracts/noema_hub.py", ["", "", enableNativePayouts]);
   const witness = await deploy(client, "contracts/source_witness.py", [hub.address]);
   const engine = await deploy(client, "contracts/verdict_engine.py", [hub.address]);
   const configureHash = await (client as any).writeContract({ address: hub.address,
@@ -46,6 +47,8 @@ export default async function main(client: GenLayerClient<any>) {
   if (!receiptAccepted(configureReceipt)) throw new Error(`One-time worker binding failed: ${JSON.stringify(configureReceipt)}`);
 
   const manifest = { product: "Noema", network: "studionet", chainId: 61999,
+    sourceCommit: process.env.NOEMA_SOURCE_COMMIT || "UNRECORDED",
+    nativePayoutsEnabled: enableNativePayouts,
     rpc: "https://studio.genlayer.com/api", explorer: "https://explorer-studio.genlayer.com",
     deployedAt: new Date().toISOString(), contracts: { hub, witness, engine, configureTxHash: String(configureHash) } };
   mkdirSync(path.resolve(process.cwd(), "deployments"), { recursive: true });

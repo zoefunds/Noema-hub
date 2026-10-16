@@ -130,15 +130,13 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 
 ## Verified Studionet release
 
-- Hub: `0x8AF8731fC1143010dD9b21e8B357A0Ca9D1644b6`
-- SourceWitness: `0x366815EC7f963786E8A0d6Ec7c10bb38aE989D0b`
-- VerdictEngine: `0x3baDCAf04b067B212Cd51fBf8FA95ef8DC209796`
+- Hub: `0x6592007a9e33CbFD99A62e0979a71149CF6684B4`
+- SourceWitness: `0x6d04F2a47B6a2EE5128a87A839127Fdcf0E15b28`
+- VerdictEngine: `0x16262D365832F73Fdc4095e4942872166fdF39E0`
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
 
-StudioNet currently rejects emitted native transfers to ordinary wallet addresses as `Contract <EOA> not found`. The finalized failed child transaction and unchanged wallet balance are preserved in the acceptance artifact. The production UI keeps native withdrawal paused until this runtime behavior is corrected; crediting and settlement remain fully auditable, but wallet payout is not represented as successful.
-
-The current deployment also enforces this pause inside `NoemaHub`, so a direct contract call cannot consume credit while StudioNet delivery is unavailable.
+Native withdrawals use the EVM recipient interface and external finalized value messages. The production UI verifies the child receipt, exact recipient and amount, `value_credited`, the recipient wallet balance delta, and the Hub credit readback before reporting payment. The verified live withdrawal and duplicate rejection are recorded in `deployments/e2e-studionet.json`.
 
 The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The complete public-network run is preserved in `deployments/e2e-studionet.json`.

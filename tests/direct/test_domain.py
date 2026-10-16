@@ -1,5 +1,7 @@
 import json
 import pytest
+import ast
+from pathlib import Path
 
 from contracts.domain import (
     MAX_EVIDENCE,
@@ -104,3 +106,31 @@ def test_large_graph_has_hard_cumulative_bounds():
     assert len(submissions) == 72
     assert len(manifest_root(retained)) == 64
     assert MAX_LIFETIME_SUBMISSIONS > MAX_EVIDENCE
+
+
+@pytest.mark.parametrize("status", [408, 425, 429, 500, 502, 503, 504])
+def test_temporary_http_failures_are_unavailable_and_do_not_imply_invalid_evidence(status):
+    assert classify_http_status(status) == "UNAVAILABLE"
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 410])
+def test_permanent_http_source_failures_are_not_attested(status):
+    assert classify_http_status(status) == "REJECTED"
+
+
+def test_document_body_with_unsuccessful_http_status_cannot_be_attested():
+    body = "A valid looking public notice that must not be admitted when the response status is an error."
+    assert body
+    assert classify_http_status(503) == "UNAVAILABLE"
+    assert classify_http_status(200) == "SUCCESS"
+
+
+def classify_http_status(status):
+    source = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
+    tree = ast.parse(source)
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_classify_http_status")
+    module = ast.Module(body=[function], type_ignores=[])
+    namespace = {"SUCCESS_STATUS_MIN": 200, "SUCCESS_STATUS_MAX": 299,
+                 "TEMPORARY_HTTP_STATUSES": (408, 425, 429, 500, 502, 503, 504)}
+    exec(compile(module, "source_witness_http_classification", "exec"), namespace)
+    return namespace["_classify_http_status"](status)

@@ -13,6 +13,15 @@ FIELDS = ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
 MAX_FETCH = 24000
 SUCCESS_STATUS_MIN = 200
 SUCCESS_STATUS_MAX = 299
+TEMPORARY_HTTP_STATUSES = (408, 425, 429, 500, 502, 503, 504)
+
+
+def _classify_http_status(status_code):
+    if SUCCESS_STATUS_MIN <= status_code <= SUCCESS_STATUS_MAX:
+        return "SUCCESS"
+    if status_code in TEMPORARY_HTTP_STATUSES or status_code >= 500:
+        return "UNAVAILABLE"
+    return "REJECTED"
 
 
 def _json(value):
@@ -113,11 +122,14 @@ def _inspect(question, rule, policy, accepted_manifest, requested_url, claim):
             "candidate": {"requested_url": requested_url, "claim": claim}, "http_status": status_code,
             "document": body})
         )
-        if not SUCCESS_STATUS_MIN <= status_code <= SUCCESS_STATUS_MAX:
-            return {"status": "REJECTED", **{f: False for f in FIELDS},
+        classification = _classify_http_status(status_code)
+        if classification != "SUCCESS":
+            # Transient service/rate-limit responses do not establish invalid
+            # evidence. Keep the outcome retryable and refund the bond.
+            return {"status": classification, **{f: False for f in FIELDS},
                     "document_publisher": "", "document_canonical_url": "", "published_at": "",
                     "content_digest": content_digest, "http_status": status_code,
-                    "basis": f"HTTP status {status_code} is outside the accepted 2xx range."}
+                    "basis": f"HTTP status {status_code} is outside the accepted 2xx range; classified as {classification}."}
         answer = _normalize(gl.nondet.exec_prompt(prompt, response_format="json"))
         # GenVM's current web response proves the bytes and status returned for
         # the requested URL, but does not expose an authenticated final URL or

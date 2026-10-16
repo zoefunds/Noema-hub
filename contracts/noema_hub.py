@@ -21,6 +21,14 @@ REVEAL_WINDOW = 1200
 STAGE_WINDOW = 1800
 
 
+@gl.evm.contract_interface
+class _EvmRecipient:
+    class View:
+        pass
+    class Write:
+        pass
+
+
 def _now():
     return int(datetime.fromisoformat(gl.message_raw["datetime"]).timestamp())
 
@@ -70,6 +78,8 @@ class NoemaHub(gl.Contract):
     reservations: TreeMap[str, str]
     credits: TreeMap[Address, u256]
     pending_outbound: TreeMap[Address, u256]
+    withdrawal_nonce: TreeMap[Address, u256]
+    withdrawals: TreeMap[str, str]
     native_payouts_enabled: bool
     witness_address: str
     engine_address: str
@@ -489,22 +499,61 @@ class NoemaHub(gl.Contract):
         if account not in self.credits or int(self.credits[account]) == 0:
             raise gl.vm.UserError("[EXPECTED] no credit available")
         amount = int(self.credits[account])
+        nonce = int(self.withdrawal_nonce[account]) if account in self.withdrawal_nonce else 0
+        withdrawal_id = _sha(_json({"recipient": str(account).lower(), "nonce": nonce, "amount": amount}))
+        if withdrawal_id in self.withdrawals:
+            raise gl.vm.UserError("[EXPECTED] withdrawal already exists")
         self.credits[account] = u256(0)
         self.claimable = u256(int(self.claimable) - amount)
         self.withdrawn = u256(int(self.withdrawn) + amount)
-        self.pending_outbound[account] = u256(amount)
-        # Enable this path only on networks where wallet delivery and the
-        # failed-message callback have both been proven end to end.
-        gl.get_contract_at(account).emit_transfer(value=u256(amount))
+        self.pending_outbound[account] = u256(int(self.pending_outbound[account]) + amount if account in self.pending_outbound else amount)
+        self.withdrawal_nonce[account] = u256(nonce + 1)
+        self.withdrawals[withdrawal_id] = _json({"id": withdrawal_id, "recipient": str(account),
+            "amount": str(amount), "status": "PENDING", "created_at": _iso(), "child_tx": ""})
+        # EOA recipients are chain-layer accounts. Use the EVM external-message
+        # interface documented for EOA transfers, not an IC-to-IC message.
+        _EvmRecipient(Address(str(account))).emit_transfer(value=u256(amount), on="finalized")
+
+    @gl.public.write
+    def record_withdrawal_delivery(self, withdrawal_id: str, child_tx: str) -> None:
+        """Permissionless delivery acknowledgement after child finalization.
+
+        Callers must supply a child hash; the current contract cannot verify an
+        external receipt itself, so this method only records an auditable claim
+        and never enables a second payout. Reconciliation is separate.
+        """
+        if withdrawal_id not in self.withdrawals:
+            raise gl.vm.UserError("[EXPECTED] withdrawal not found")
+        item = json.loads(self.withdrawals[withdrawal_id])
+        if item["status"] != "PENDING" or not child_tx:
+            raise gl.vm.UserError("[EXPECTED] withdrawal is not pending")
+        item["status"] = "DELIVERY_REPORTED"
+        item["child_tx"] = _text(child_tx, "child transaction", 128)
+        item["reported_at"] = _iso()
+        self.withdrawals[withdrawal_id] = _json(item)
+
+    @gl.public.view
+    def get_withdrawal(self, withdrawal_id: str) -> dict:
+        if withdrawal_id not in self.withdrawals:
+            raise gl.vm.UserError("[EXPECTED] withdrawal not found")
+        return json.loads(self.withdrawals[withdrawal_id])
+
+    @gl.public.view
+    def get_pending_outbound(self, account: str) -> str:
+        address = Address(_address(account, "account"))
+        return str(int(self.pending_outbound[address]) if address in self.pending_outbound else 0)
 
     @gl.public.write.payable
     def __on_errored_message__(self) -> None:
+        # EOA transfers are external EVM messages and do not call this hook.
+        # Internal-message failure recovery is keyed by message sender and exact
+        # value. Aggregate pending amounts prevent one request overwriting another.
         account = gl.message.sender_address
         amount = int(gl.message.value)
         expected = int(self.pending_outbound[account]) if account in self.pending_outbound else 0
-        if amount == 0 or amount != expected:
+        if amount == 0 or amount > expected:
             raise gl.vm.UserError("[EXPECTED] unknown failed outbound transfer")
-        self.pending_outbound[account] = u256(0)
+        self.pending_outbound[account] = u256(expected - amount)
         self.withdrawn = u256(int(self.withdrawn) - amount)
         self._credit(account, amount)
 

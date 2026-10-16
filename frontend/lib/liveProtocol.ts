@@ -95,6 +95,47 @@ export async function waitForFinalization(hash: string): Promise<unknown> {
   assertSuccessfulReceipt(receipt);
   return receipt;
 }
+export async function readWalletBalance(address: string): Promise<bigint> {
+  const injected = provider(); if (!injected) throw new Error("No injected wallet found for balance verification.");
+  const result = await withRpc(() => injected.request({ method: "eth_getBalance", params: [address, "latest"] }));
+  if (typeof result !== "string" || !/^0x[0-9a-f]+$/i.test(result)) throw new Error("Wallet returned an invalid native balance.");
+  return BigInt(result);
+}
+export function isVerifiedNativeTransfer(child: any, recipient: string, expectedAmount: bigint): boolean {
+  const status = String(child?.statusName ?? child?.status_name ?? "").toUpperCase();
+  let value: bigint;
+  try { value = typeof child?.value === "bigint" ? child.value : BigInt(String(child?.value ?? "0")); }
+  catch { return false; }
+  const destination = String(child?.to_address ?? child?.recipient ?? "").toLowerCase();
+  return status === "FINALIZED" && child?.value_credited === true
+    && destination === recipient.toLowerCase() && value === expectedAmount;
+}
+export async function waitForNativeTransfer(parentHash: string, recipient: string, expectedAmount: bigint,
+  balanceBefore: bigint): Promise<{ childHash: string; balanceAfter: bigint }> {
+  const client: any = readClient();
+  const childHashes: string[] = await withRpc(() => client.getTriggeredTransactionIds({ hash: parentHash as any }));
+  if (!Array.isArray(childHashes) || childHashes.length === 0) {
+    throw new Error("Withdrawal parent finalized, but no outgoing child transfer was recorded.");
+  }
+  let deliveredChild = "";
+  for (const childHash of childHashes) {
+    let child: any;
+    try { child = await withRpc(() => client.waitForTransactionReceipt({ hash: childHash as any,
+      status: "FINALIZED", retries: 240, interval: 5_000 })); }
+    catch { continue; }
+    if (isVerifiedNativeTransfer(child, recipient, expectedAmount)) {
+      deliveredChild = childHash; break;
+    }
+  }
+  if (!deliveredChild) throw new Error("Withdrawal parent finalized, but no child transfer finalized with the expected recipient, amount, and credited flag.");
+  let balanceAfter = await readWalletBalance(recipient);
+  for (let attempt = 0; attempt < 60 && balanceAfter < balanceBefore + expectedAmount; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    balanceAfter = await readWalletBalance(recipient);
+  }
+  if (balanceAfter < balanceBefore + expectedAmount) throw new Error(`Child transfer ${deliveredChild} finalized, but recipient balance has not increased by the expected amount.`);
+  return { childHash: deliveredChild, balanceAfter };
+}
 export function parseGen(value: string): bigint {
   if (!/^\d+(\.\d{1,18})?$/.test(value.trim())) throw new Error("Enter a valid GEN amount.");
   const [whole, fraction = ""] = value.trim().split("."); return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, "0"));

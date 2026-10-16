@@ -47,6 +47,9 @@ def test_http_and_origin_provenance_are_enforced_before_semantic_acceptance():
     assert "parts.username or parts.password" in witness
     assert '"transport_origin_verified": False' in witness
     assert 'answer["document_canonical_url"] = ""' in witness
+    assert "TEMPORARY_HTTP_STATUSES" in witness
+    assert 'return "UNAVAILABLE"' in witness
+    assert 'classification = _classify_http_status(status_code)' in witness
 
 
 def test_executable_settlement_requires_candidate_and_bounded_decisive_set():
@@ -64,11 +67,17 @@ def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
     assert "if not self.native_payouts_enabled" in hub
     assert "native payouts are unavailable on this deployment" in hub
     zero = hub.index("self.credits[account] = u256(0)")
-    transfer = hub.index("emit_transfer(value=u256(amount))")
+    transfer = hub.index("_EvmRecipient(Address(str(account))).emit_transfer(value=u256(amount), on=\"finalized\")")
     assert zero < transfer
     assert "gl.transfer(" not in hub
+    assert "@gl.evm.contract_interface" in hub
+    assert "_EvmRecipient(Address(str(account))).emit_transfer" in hub
+    assert "self.withdrawals[withdrawal_id]" in hub
+    assert '"status": "PENDING"' in hub
+    assert '"DELIVERY_REPORTED"' in hub
+    assert "self.pending_outbound[account]) + amount" in hub
     assert "def __on_errored_message__" in hub
-    assert 'amount != expected' in hub
+    assert 'amount > expected' in hub
     assert "self._credit(account, amount)" in hub
 
 

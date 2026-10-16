@@ -51,19 +51,15 @@ The complete machine-readable record is in `deployments/e2e-studionet.json`. The
 
 The candidate and baseline both have HTTP status 200 and content digests. Requested origin is recorded as requested provenance; authenticated canonical URL, publisher, redirect chain, and verified response origin remain empty because the current fetch interface does not prove them.
 
-## Native payout runtime observation
+## Native payout proof
 
-A real withdrawal attempt was executed rather than simulated:
+The prior internal-message attempt on an earlier deployment failed and its callback was not observed. That failure motivated switching to the EVM recipient interface for EOAs, which the current official GenLayer documentation specifies for external chain-layer value transfers. The active payout deployment was then tested end to end:
 
-- parent withdrawal: `0xfe3b17000d5b177695453a50a772f330d296c996210bcfa32649966e9e8d6877`, finalized successfully;
-- emitted transfer: `0xbc706f67966cff0a9f407748c1d09f126b153a182fb936340853f9e88156b744`;
-- amount: `1100000000000000` atto GEN;
-- child status: `FINALIZED`;
-- child execution: `ERROR`;
-- runtime result: `Contract 0x7452084E1Cf767bf19C743051cFf27D9F7A87a4D not found`;
-- `value_credited=false`;
-- recipient balance before and after: `10029599999999999997` atto GEN.
+- parent withdrawal `0x0770d17f04c2a805aef970769808f1f32e4cffeaa09c4866256bd4d2eb31121c` finalized with successful GenVM execution;
+- emitted child `0xf3b35e84c583474418c87a793c0214fedf09a0e315654447b1f7ef9eacab27d2` finalized with `value_credited=true`;
+- child recipient is `0x7452084e1cf767bf19c743051cff27d9f7a87a4d` and value is `1100000000000000` atto GEN;
+- recipient balance changed from `10029199999999999997` to `10030299999999999997` atto GEN;
+- Hub credit changed from `1100000000000000` to `0` and `accounting_ok=true`;
+- a second withdrawal with no credit was rejected.
 
-This demonstrates that the current StudioNet backend does not deliver this contract-originated value message to an ordinary wallet, even though the pinned GenVM SDK exposes `emit_transfer`. Noema therefore disables withdrawal in production by default at both the Hub and UI layers. A future deployment may enable it only after network-level wallet-delivery and failed-callback tests pass.
-
-The Hub includes a failed-message recovery hook, but this StudioNet execution did not schedule that callback. This is retained as an explicit network blocker, not reported as a successful payout.
+The browser flow now distinguishes parent success from actual child delivery. It requires a finalized child receipt matching the recipient and amount, `value_credited=true`, an observed wallet increase of at least the payment amount, and a fresh Hub credit readback of zero before displaying success. This browser code is deployed; a desktop browser-originated full lifecycle was not exercised because desktop accessibility/screen-recording permissions remained pending during this run. The real funded network lifecycle was executed through the GenLayer client.

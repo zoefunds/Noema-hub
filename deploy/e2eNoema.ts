@@ -99,7 +99,9 @@ export default async function main(client: GenLayerClient<any>) {
     const commitment = sha256(stableJson(packet));
     const dossier = await read(client, hub, "get_dossier", [run.dossierId]);
     const sealTxHash = await write(client, hub, "seal_disclosure", [run.dossierId, commitment], BigInt(dossier.bond_atto));
-    const submissionId = await read(client, hub, "get_submission_for_commitment", [commitment]);
+    const sealedSubmissionId = await read(client, hub, "get_submission_for_commitment", [commitment]);
+    if (!sealedSubmissionId) throw new Error("Seal receipt finalized but authoritative commitment lookup returned no submission");
+    const submissionId = sealedSubmissionId;
     const discloseTxHash = await write(client, hub, "disclose", [submissionId, url, claim, salt]);
     const resolved = await waitFor(client, hub, run.dossierId,
       (value) => ["RESOLVED", "CLOSED_REFUNDED"].includes(value.status), "candidate witnessing and final verdict");
@@ -121,6 +123,20 @@ export default async function main(client: GenLayerClient<any>) {
     if (BigInt(creditBefore) === 0n) throw new Error("No researcher credit is available for withdrawal proof");
     const walletBefore = await client.getBalance({ address: RESEARCHER as `0x${string}` });
     const withdrawalTxHash = await write(client, hub, "withdraw", []);
+    const childHashes: string[] = await (client as any).getTriggeredTransactionIds({ hash: withdrawalTxHash as TransactionHash });
+    if (!Array.isArray(childHashes) || childHashes.length !== 1) {
+      throw new Error(`Expected one external payout child, found ${JSON.stringify(childHashes)}`);
+    }
+    const childHash = childHashes[0];
+    const childReceipt: any = await client.waitForTransactionReceipt({ hash: childHash as TransactionHash,
+      status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 } as any);
+    const childStatus = String(childReceipt?.statusName ?? childReceipt?.status_name ?? "").toUpperCase();
+    const childRecipient = String(childReceipt?.to_address ?? childReceipt?.recipient ?? "").toLowerCase();
+    const childValue = BigInt(childReceipt?.value ?? 0);
+    if (childStatus !== "FINALIZED" || childReceipt?.value_credited !== true
+      || childRecipient !== RESEARCHER || childValue !== BigInt(creditBefore)) {
+      throw new Error(`External payout child did not prove successful delivery: ${JSON.stringify(normalize(childReceipt))}`);
+    }
     const creditAfter = await read(client, hub, "get_credit", [RESEARCHER]);
     let walletAfter = await client.getBalance({ address: RESEARCHER as `0x${string}` });
     for (let attempt = 0; attempt < 60 && BigInt(walletAfter) <= BigInt(walletBefore); attempt += 1) {
@@ -128,14 +144,16 @@ export default async function main(client: GenLayerClient<any>) {
       walletAfter = await client.getBalance({ address: RESEARCHER as `0x${string}` });
     }
     const statsAfterWithdrawal = await read(client, hub, "get_stats", []);
-    const withdrawalAttempt = { withdrawalTxHash, creditBefore, creditAfter,
+    const withdrawalAttempt = { withdrawalTxHash, childTxHash: childHash, childStatus,
+      childRecipient, childValue: childValue.toString(), valueCredited: childReceipt.value_credited,
+      creditBefore, creditAfter,
       walletBefore: walletBefore.toString(), walletAfter: walletAfter.toString(),
       accountingOk: statsAfterWithdrawal.accounting_ok, completedAt: new Date().toISOString(),
-      verifiedPayout: BigInt(creditAfter) === 0n && BigInt(walletAfter) > BigInt(walletBefore)
+      verifiedPayout: BigInt(creditAfter) === 0n && BigInt(walletAfter) === BigInt(walletBefore) + BigInt(creditBefore)
         && Boolean(statsAfterWithdrawal.accounting_ok) };
     Object.assign(run, { withdrawalAttempt });
     saveRun(run);
-    if (BigInt(creditAfter) !== 0n || BigInt(walletAfter) <= BigInt(walletBefore) || !statsAfterWithdrawal.accounting_ok) {
+    if (BigInt(creditAfter) !== 0n || BigInt(walletAfter) !== BigInt(walletBefore) + BigInt(creditBefore) || !statsAfterWithdrawal.accounting_ok) {
       throw new Error(`Withdrawal invariants failed: ${JSON.stringify({ creditBefore, creditAfter,
         walletBefore: walletBefore.toString(), walletAfter: walletAfter.toString(), statsAfterWithdrawal })}`);
     }
