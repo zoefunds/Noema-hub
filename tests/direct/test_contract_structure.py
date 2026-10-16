@@ -14,10 +14,23 @@ def contract_methods(path: Path, class_name: str) -> set[str]:
     return {node.name for node in contract.body if isinstance(node, ast.FunctionDef)}
 
 
-def test_hub_exposes_complete_recovery_and_economic_lifecycle():
+def test_hub_exposes_submission_and_economic_lifecycle():
     methods = contract_methods(HUB, "NoemaHub")
     assert {"open_dossier", "seal_disclosure", "disclose", "record_attestation", "record_verdict",
             "expire_disclosure", "expire_stage", "expire_dossier", "withdraw", "get_stats"} <= methods
+
+
+def test_unavailable_http_callback_refunds_researcher_bond_and_marks_submission_retryable():
+    tree = ast.parse(HUB.read_text())
+    contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
+    method = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "record_attestation")
+    unavailable = next(node for node in ast.walk(method) if isinstance(node, ast.If)
+                       and ast.unparse(node.test) == "result.get('status') == 'UNAVAILABLE'")
+    body = "\n".join(ast.unparse(statement) for statement in unavailable.body)
+    assert "submission['status'] = 'RETRYABLE'" in body
+    assert "self._release_bond(submission, submission['researcher'])" in body
+    assert "self._finish_submission(dossier, submission)" in body
+    assert "dossier['sponsor']" not in body
 
 
 def test_workers_are_bound_and_callbacks_are_authenticated():

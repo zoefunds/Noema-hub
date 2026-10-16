@@ -72,7 +72,8 @@ export default async function main(client: GenLayerClient<any>) {
   const run = loadRun();
 
   if (phase === "sponsor") {
-    if (run.refreshedDeploymentRun && run.refreshedDeploymentRun.verified !== true) {
+    if (run.refreshedDeploymentRun && run.refreshedDeploymentRun.verified !== true
+      && (!run.refreshedDeploymentRun.fixtureMismatch || run.refreshedDeploymentRun.retryUsed === true)) {
       throw new Error(`An incomplete sponsor phase already exists for ${run.refreshedDeploymentRun.dossierId}; reconcile it before creating another dossier`);
     }
     const baselineUrl = "https://api.github.com/repos/openai/codex/git/trees/main";
@@ -89,8 +90,12 @@ export default async function main(client: GenLayerClient<any>) {
       closesAt,
     ], 1_000_000_000_000_000n);
     const dossierId = await read(client, hub, "find_latest_dossier_by_sponsor", [SPONSOR]);
+    const supersededRuns = run.refreshedDeploymentRun
+      ? [...(run.supersededRuns ?? []), { ...run.refreshedDeploymentRun, retryUsed: true, supersededAt: new Date().toISOString() }]
+      : (run.supersededRuns ?? []);
     const started = { ...run, product: "Noema", network: "studionet", startedAt: new Date().toISOString(), sponsor: SPONSOR,
-      researcher: RESEARCHER, dossierId, sponsorTxHash: txHash, baseline: { url: baselineUrl, claim: baselineClaim } };
+      researcher: RESEARCHER, dossierId, sponsorTxHash: txHash, baseline: { url: baselineUrl, claim: baselineClaim },
+      supersededRuns, refreshedDeploymentRun: { startedAt: new Date().toISOString(), dossierId, sponsorTxHash: txHash, verified: false } };
     saveRun(started);
     const dossier = await waitFor(client, hub, dossierId, (value) => value.status === "OPEN" || value.status === "CLOSED_REFUNDED", "baseline adjudication");
     saveRun({ ...started, dossierAfterBaseline: dossier });
@@ -99,18 +104,19 @@ export default async function main(client: GenLayerClient<any>) {
   }
 
   if (phase === "research") {
-    if (!run.dossierId) throw new Error("Run the sponsor phase first");
-    assertSameAddress(await read(client, hub, "find_latest_dossier_by_sponsor", [SPONSOR]), run.dossierId, "Latest sponsor dossier");
-    const initialDossier = await read(client, hub, "get_dossier", [run.dossierId]);
+    const dossierId = String(run.refreshedDeploymentRun?.dossierId || run.dossierId || "");
+    if (!dossierId) throw new Error("Run the sponsor phase first");
+    assertSameAddress(await read(client, hub, "find_latest_dossier_by_sponsor", [SPONSOR]), dossierId, "Latest sponsor dossier");
+    const initialDossier = await read(client, hub, "get_dossier", [dossierId]);
     if (initialDossier.status !== "OPEN") throw new Error(`Research phase requires an OPEN dossier, received ${initialDossier.status}`);
     const url = "https://raw.githubusercontent.com/openai/codex/main/LICENSE";
     const claim = "The root LICENSE file begins with Apache License Version 2.0, January 2004, and states the Apache License's terms, so it explicitly declares Apache License 2.0.";
     const salt = randomBytes(32).toString("hex");
-    const packet = { domain: "NOEMA_DISCLOSURE_V1", chain_id: "61999", hub: hub.toLowerCase(), dossier_id: run.dossierId,
+    const packet = { domain: "NOEMA_DISCLOSURE_V1", chain_id: "61999", hub: hub.toLowerCase(), dossier_id: dossierId,
       researcher: RESEARCHER.toLowerCase(), url, claim, salt };
     const commitment = sha256(stableJson(packet));
-    const dossier = await read(client, hub, "get_dossier", [run.dossierId]);
-    const sealTxHash = await write(client, hub, "seal_disclosure", [run.dossierId, commitment], BigInt(dossier.bond_atto));
+    const dossier = await read(client, hub, "get_dossier", [dossierId]);
+    const sealTxHash = await write(client, hub, "seal_disclosure", [dossierId, commitment], BigInt(dossier.bond_atto));
     const sealedSubmissionId = await read(client, hub, "get_submission_for_commitment", [commitment]);
     if (!sealedSubmissionId) throw new Error("Seal receipt finalized but authoritative commitment lookup returned no submission");
     const submissionId = sealedSubmissionId;
@@ -120,7 +126,7 @@ export default async function main(client: GenLayerClient<any>) {
     const discloseTxHash = await write(client, hub, "disclose", [submissionId, url, claim, salt]);
     Object.assign(run.researchPhase, { discloseTxHash, disclosedAt: new Date().toISOString() });
     saveRun(run);
-    const resolved = await waitFor(client, hub, run.dossierId,
+    const resolved = await waitFor(client, hub, dossierId,
       (value) => ["RESOLVED", "CLOSED_REFUNDED"].includes(value.status), "candidate witnessing and final verdict");
     const submission = await read(client, hub, "get_submission", [submissionId]);
     const stats = await read(client, hub, "get_stats", []);
@@ -129,10 +135,10 @@ export default async function main(client: GenLayerClient<any>) {
     if (resolved.status !== "RESOLVED" || resolved.winner.toLowerCase() !== RESEARCHER || submission.status !== "DECISIVE" || !stats.accounting_ok) {
       throw new Error(`Settlement invariants failed: ${JSON.stringify({ resolved, submission, stats })}`);
     }
-    Object.assign(run, { completedAt: new Date().toISOString(), candidate: { url, claim, commitment, salt }, submissionId,
+    Object.assign(run, { dossierId, completedAt: new Date().toISOString(), candidate: { url, claim, commitment, salt }, submissionId,
       sealTxHash, discloseTxHash, finalDossier: resolved, finalSubmission: submission, credits: { researcher: researcherCredit, sponsor: sponsorCredit }, stats });
     saveRun(run);
-    return { dossierId: run.dossierId, submissionId, status: resolved.status, resolution: resolved.resolution,
+    return { dossierId, submissionId, status: resolved.status, resolution: resolved.resolution,
       decisiveIds: resolved.decisive_ids, researcherCredit, accountingOk: stats.accounting_ok };
   }
   if (phase === "withdraw") {

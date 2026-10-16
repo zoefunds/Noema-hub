@@ -101,6 +101,16 @@ export async function readWalletBalance(address: string): Promise<bigint> {
   if (typeof result !== "string" || !/^0x[0-9a-f]+$/i.test(result)) throw new Error("Wallet returned an invalid native balance.");
   return BigInt(result);
 }
+export function hasEmptyCode(code: unknown): boolean { return typeof code === "string" && code.toLowerCase() === "0x"; }
+export async function assertExternalEoaRecipient(address: string): Promise<void> {
+  if (!/^0x[0-9a-f]{40}$/i.test(address)) throw new Error("The payout recipient address is invalid.");
+  const injected = provider(); if (!injected) throw new Error("No injected wallet found for recipient verification.");
+  await ensureStudionet();
+  const code = await withRpc(() => injected.request({ method: "eth_getCode", params: [address, "latest"] }));
+  if (!hasEmptyCode(code)) {
+    throw new Error("Native GEN payouts require an externally owned wallet address; contract-wallet recipients are not supported by this deployment.");
+  }
+}
 export function isVerifiedNativeTransfer(child: any, recipient: string, expectedAmount: bigint): boolean {
   const status = String(child?.statusName ?? child?.status_name ?? "").toUpperCase();
   let value: bigint;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSuccessfulReceipt, disclosureCommitment, isVerifiedNativeTransfer, upsertPendingPayout } from "./liveProtocol";
+import { assertSuccessfulReceipt, disclosureCommitment, hasEmptyCode, isVerifiedNativeTransfer, upsertPendingPayout } from "./liveProtocol";
 
 describe("disclosure commitment", () => {
   const input = { dossierId: "noema-7", url: "https://example.org/report", claim: "The release shipped.", salt: "ab".repeat(32) };
@@ -38,6 +38,11 @@ describe("native payout acceptance", () => {
     expect(isVerifiedNativeTransfer({ ...child, status_name: "ERROR" }, recipient, 1_100_000_000_000_000n)).toBe(false);
     expect(isVerifiedNativeTransfer({ ...child, to_address: `0x${"8".repeat(40)}` }, recipient, 1_100_000_000_000_000n)).toBe(false);
     expect(isVerifiedNativeTransfer({ ...child, value: 5n }, recipient, 1_100_000_000_000_000n)).toBe(false);
+  });
+  it("only treats empty-code addresses as externally owned payout recipients", () => {
+    expect(hasEmptyCode("0x")).toBe(true);
+    expect(hasEmptyCode("0x60006000")).toBe(false);
+    expect(hasEmptyCode(undefined)).toBe(false);
   });
   it("retains multiple pending withdrawals for one account without replacing older recovery records", () => {
     const first = { account: recipient, parentHash: `0x${"1".repeat(64)}`, amount: "7", walletBefore: "10", createdAt: "2026-10-16T00:00:00.000Z" };

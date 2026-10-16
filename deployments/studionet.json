@@ -48,5 +48,32 @@
     "configureFinalizedAt": "2026-10-16T07:25:37.758325Z",
     "nativePayoutsEnabled": true,
     "hubBalancePreflight": true
+  },
+  "acceptance": {
+    "verifiedAt": "2026-10-16T08:02:38Z",
+    "sourceCommit": "fddf4669778d68388a1544ffa74cacd147850341",
+    "e2eArtifact": "deployments/e2e-studionet.json",
+    "dossierId": "noema-4",
+    "resolution": "POSITION_A",
+    "decisiveIds": [
+      "note-2"
+    ],
+    "manifestRoot": "8c5f076cafe808debdd8de27fe0b3e9fa7dff7af597f1b52035e959910b328bd",
+    "researcherCreditBeforeWithdrawal": "2200000000000000",
+    "researcherCreditAfterWithdrawal": "0",
+    "withdrawalParent": "0x117b537038f9faacaf069f1c4d1fbeed5731ab0940b7f132b2469694f58c74c6",
+    "withdrawalChild": "0xd5e57ca9a0c6fa53ed73901d919a7cf56ba15e612be9b180a9c16a7a2a431cf0",
+    "valueCredited": true,
+    "duplicateWithdrawalRejected": true,
+    "accountingOk": true,
+    "browserOriginatedLifecycle": false
+  },
+  "frontendProduction": {
+    "deploymentId": "dpl_3PVRPfTCXiYMk3ACw5WbPbeNAbor",
+    "url": "https://neoma-hub.vercel.app",
+    "readyState": "READY",
+    "healthCheck": "2026-10-16T07:46:06.759Z",
+    "chainId": 61999,
+    "hubCodeAvailable": true
   }
 }
