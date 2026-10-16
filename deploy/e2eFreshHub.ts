@@ -280,8 +280,21 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     const resolved = ["RESOLVED", "CLOSED_REFUNDED"].includes(observed.status) ? observed : await waitForDossier(researcherClient, hub, dossierId,
       (value) => ["RESOLVED", "CLOSED_REFUNDED"].includes(value.status), "source witnessing and verdict settlement");
     const submission = await read(researcherClient, hub, "get_submission", [submissionId]);
-    const creditBefore = await read(researcherClient, hub, "get_credit", [researcher]);
-    const statsBefore = await read(researcherClient, hub, "get_stats", []);
+    const currentCredit = await read(researcherClient, hub, "get_credit", [researcher]);
+    const currentStats = await read(researcherClient, hub, "get_stats", []);
+    const resumingPayout = Boolean(resuming && previous?.withdrawalTx && previous?.childHash);
+    const creditBefore = resumingPayout ? String(previous.creditBeforeWithdrawal) : currentCredit;
+    const statsBefore = resumingPayout ? (previous.statsBeforeWithdrawal ?? currentStats) : currentStats;
+    if (resumingPayout) {
+      const pending = await read(researcherClient, hub, "get_latest_withdrawal", [researcher]);
+      const pendingAmount = pending?.amount === undefined ? -1n : BigInt(pending.amount);
+      const outboundMatches = pending?.status === "PENDING"
+        ? currentStats.pending_outbound === creditBefore
+        : pending?.status === "DELIVERED" && currentStats.pending_outbound === "0";
+      if (currentCredit !== "0" || !outboundMatches || pendingAmount !== BigInt(creditBefore)) {
+        throw new Error(`Interrupted payout no longer matches authoritative withdrawal state: ${JSON.stringify({ currentCredit, currentStats, pending })}`);
+      }
+    }
     if (resolved.status !== "RESOLVED" || resolved.winner.toLowerCase() !== researcher.toLowerCase()
       || submission.status !== "DECISIVE" || !submission.verdict?.contribution_required
       || submission.verdict?.counterfactual_outcome !== "UNRESOLVED" || !statsBefore.accounting_ok
@@ -292,7 +305,9 @@ export default async function main(researcherClient: GenLayerClient<any>) {
       creditBeforeWithdrawal: creditBefore, statsBeforeWithdrawal: statsBefore,
       researcherWalletBeforeWithdrawal: String(await evmBalance(researcherClient, researcher)) });
 
-    const walletBefore = await evmBalance(researcherClient, researcher);
+    const walletBefore = resumingPayout
+      ? BigInt(previous.walletBefore ?? previous.researcherWalletBeforeWithdrawal)
+      : await evmBalance(researcherClient, researcher);
     // Resume hashes belong to this failed run only. A prior E2E can have the
     // same recipient, payout amount, and even a finalized child, but it must
     // never be mistaken for delivery from this Hub or dossier.
@@ -300,6 +315,7 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     let childHash = resuming ? String(previous?.childHash ?? "") : "";
     if (!withdrawalTx && BigInt(creditBefore) > 0n) {
       withdrawalTx = await write(researcherClient, hub, "withdraw", []);
+      saveRun({ withdrawalTx, phase: "WITHDRAWAL_PARENT_FINALIZED", walletBefore: String(walletBefore), creditBeforeWithdrawal: creditBefore });
       const childHashes: string[] = await (researcherClient as any).getTriggeredTransactionIds({ hash: withdrawalTx as TransactionHash });
       if (!Array.isArray(childHashes) || childHashes.length !== 1) throw new Error(`Expected one payout child; got ${JSON.stringify(childHashes)}`);
       childHash = childHashes[0];
