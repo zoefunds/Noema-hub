@@ -92,7 +92,10 @@ def _tx_timestamp(value):
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.timestamp()
+        # GenVM records its internal withdrawal time to whole seconds, while
+        # StudioNet's parent EVM transaction receipt includes sub-second
+        # precision. Compare the shared UTC second instead of exact floats.
+        return int(parsed.timestamp())
     except Exception:
         return -1
 

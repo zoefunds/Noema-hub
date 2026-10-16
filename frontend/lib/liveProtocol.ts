@@ -9,6 +9,9 @@ import type { Dossier, PendingDisclosure, PendingPayout } from "./types";
 export const CHAIN_ID = 61999;
 export const CHAIN_HEX = `0x${CHAIN_ID.toString(16)}`;
 export const RPC_URL = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
+function clientRpcUrl(): string {
+  return typeof window === "undefined" ? RPC_URL : new URL("/api/genlayer-rpc", window.location.origin).toString();
+}
 export const EXPLORER_URL = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER || "https://explorer-studio.genlayer.com";
 export const HUB_ADDRESS = process.env.NEXT_PUBLIC_NOEMA_HUB_ADDRESS || "";
 export const NATIVE_PAYOUTS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_PAYOUTS_ENABLED === "true";
@@ -41,7 +44,7 @@ function normalize(value: unknown): any {
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalize(item)]));
   return typeof value === "bigint" ? value.toString() : value;
 }
-function readClient() { return createClient({ chain: studionet, endpoint: RPC_URL } as any); }
+function readClient() { return createClient({ chain: studionet, endpoint: clientRpcUrl() } as any); }
 async function read<T>(functionName: string, args: unknown[] = [], latest = false): Promise<T> {
   const key = JSON.stringify([functionName, args.map((item) => typeof item === "bigint" ? item.toString() : item), latest]);
   const cached = readCache.get(key); if (cached && cached.expires > Date.now()) return cached.value as T;
@@ -76,7 +79,7 @@ export async function connectWallet(): Promise<string> {
 }
 export async function submitHubWrite(address: string, functionName: string, args: unknown[] = [], value = 0n): Promise<string> {
   const injected = provider(); if (!injected) throw new Error("No injected wallet found.");
-  const client = createClient({ chain: studionet, endpoint: RPC_URL, account: address as `0x${string}`, provider: injected } as any);
+  const client = createClient({ chain: studionet, endpoint: clientRpcUrl(), account: address as `0x${string}`, provider: injected } as any);
   const hash = await withRpc(() => client.writeContract({ address: assertHub(), functionName, args, value } as any)); readCache.clear(); return String(hash);
 }
 export function assertSuccessfulReceipt(receipt: any): void {

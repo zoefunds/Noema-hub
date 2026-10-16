@@ -1,4 +1,6 @@
 import { existsSync, unlinkSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,8 +38,20 @@ if (ephemeralKey) {
   delete process.env.NOEMA_SOURCE_COMMIT;
   process.env.NOEMA_SOURCE_COMMIT = revision.stdout.trim();
   console.log(`Running with ephemeral StudioNet signer ${account.address}; private key remains process-memory only.`);
-  const { default: deploy } = await import("./deploy/deployNoema.ts");
-  await deploy(client);
+  if (process.env.NOEMA_E2E_SKIP_DEPLOY === "1") {
+    const manifest = JSON.parse(readFileSync(path.join(root, "deployments/studionet.json"), "utf8"));
+    if (manifest.network !== "studionet" || manifest.chainId !== 61999) throw new Error("E2E retry is locked to the deployed StudioNet manifest");
+    for (const [name, file] of [["hub", "contracts/noema_hub.py"], ["witness", "contracts/source_witness.py"], ["engine", "contracts/verdict_engine.py"]]) {
+      const localHash = createHash("sha256").update(readFileSync(path.join(root, file))).digest("hex");
+      if (manifest.contracts?.[name]?.sourceSha256 !== localHash || manifest.contracts?.[name]?.deployedSourceMatchesLocal !== true) {
+        throw new Error(`Refusing E2E retry: the deployed ${name} source does not match the local contract source.`);
+      }
+    }
+    console.log("Reusing the verified deployment; contract source hashes match the local Hub, Witness, and Engine.");
+  } else {
+    const { default: deploy } = await import("./deploy/deployNoema.ts");
+    await deploy(client);
+  }
   process.env.NOEMA_E2E_FRESH = "1";
   const { default: freshE2E } = await import("./deploy/e2eFreshHub.ts");
   const result = await freshE2E(client);

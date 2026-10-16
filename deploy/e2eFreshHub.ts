@@ -158,9 +158,10 @@ export default async function main(researcherClient: GenLayerClient<any>) {
   if (sponsorAccount.address.toLowerCase() === researcher.toLowerCase()) {
     throw new Error("Fresh Hub E2E requires distinct sponsor and researcher accounts");
   }
-  if (resuming && String(previous?.sponsor).toLowerCase() !== sponsorAccount.address.toLowerCase()) {
-    throw new Error("Interrupted E2E sponsor does not match the selected sponsor key; refusing to mix runs");
-  }
+  // A resumed run already has a finalized sponsor funding/open-dossier
+  // transaction. Its original ephemeral sponsor key may have been safely
+  // swept and deleted; no sponsor authority is needed to resume researcher
+  // settlement, so do not require or recreate that signer.
   const sponsorClient = createClient({ chain: studionet, endpoint: manifest.rpc, account: sponsorAccount } as any);
   if (temporaryKeyFile && !existsSync(temporaryKeyFile)) {
     writeFileSync(temporaryKeyFile, privateKey, { mode: 0o600, flag: "wx" });
@@ -172,7 +173,7 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     sponsorKeyHandling: selection.handling,
     ...(temporaryKeyFile ? { temporaryKeyFile } : {}), phase: resuming ? "RESUMING" : "PREFLIGHT" });
   const initialResearcherBalance = await evmBalance(researcherClient, researcher);
-  saveRun({ researcherWalletBeforeFunding: String(initialResearcherBalance), phase: "FUNDING_TEMPORARY_SPONSOR" });
+  saveRun({ researcherWalletBeforeFunding: String(initialResearcherBalance), phase: resuming ? "RESUMING_EXISTING_DOSSIER" : "FUNDING_TEMPORARY_SPONSOR" });
 
   let sponsorFundingHash = previous?.sponsor === sponsorAccount.address ? String(previous.sponsorFundingHash ?? "") : "";
   let sponsorFundingAmount = 0n;
@@ -180,26 +181,31 @@ export default async function main(researcherClient: GenLayerClient<any>) {
   let completed: any = null;
   let sponsorSweep: any = null;
   try {
-    let fundedSponsorBalance = await evmBalance(researcherClient, sponsorAccount.address);
-    sponsorOpeningBalance = fundedSponsorBalance;
-    if (fundedSponsorBalance < SPONSOR_REWARD) {
-      const fundingAmount = SPONSOR_FUNDING > fundedSponsorBalance ? SPONSOR_FUNDING - fundedSponsorBalance : 0n;
-      sponsorFundingAmount = fundingAmount;
-      sponsorFundingHash = String(await (researcherClient as any).sendTransaction({ to: sponsorAccount.address,
-        value: fundingAmount } as any));
-      const fundingReceipt = await waitForEvmReceipt(researcherClient, sponsorFundingHash);
-      fundedSponsorBalance = await waitForBalanceAtLeast(researcherClient, sponsorAccount.address, SPONSOR_FUNDING);
-      if (fundedSponsorBalance < SPONSOR_REWARD) throw new Error(`Temporary sponsor did not receive enough GEN: ${fundedSponsorBalance}`);
-      saveRun({ sponsorFundingHash, sponsorFunding: { hash: sponsorFundingHash,
-        amount: fundingAmount.toString(), receiptStatus: fundingReceipt.status } });
+    let fundedSponsorBalance = 0n;
+    if (!resuming) {
+      fundedSponsorBalance = await evmBalance(researcherClient, sponsorAccount.address);
+      sponsorOpeningBalance = fundedSponsorBalance;
+      if (fundedSponsorBalance < SPONSOR_REWARD) {
+        const fundingAmount = SPONSOR_FUNDING > fundedSponsorBalance ? SPONSOR_FUNDING - fundedSponsorBalance : 0n;
+        sponsorFundingAmount = fundingAmount;
+        sponsorFundingHash = String(await (researcherClient as any).sendTransaction({ to: sponsorAccount.address,
+          value: fundingAmount } as any));
+        const fundingReceipt = await waitForEvmReceipt(researcherClient, sponsorFundingHash);
+        fundedSponsorBalance = await waitForBalanceAtLeast(researcherClient, sponsorAccount.address, SPONSOR_FUNDING);
+        if (fundedSponsorBalance < SPONSOR_REWARD) throw new Error(`Temporary sponsor did not receive enough GEN: ${fundedSponsorBalance}`);
+        saveRun({ sponsorFundingHash, sponsorFunding: { hash: sponsorFundingHash,
+          amount: fundingAmount.toString(), receiptStatus: fundingReceipt.status } });
+      } else {
+        fundedSponsorBalance = await waitForBalanceAtLeast(researcherClient, sponsorAccount.address, SPONSOR_REWARD);
+      }
+      const fundingReceipt = sponsorFundingHash ? await waitForEvmReceipt(researcherClient, sponsorFundingHash) : null;
+      saveRun({ phase: "SPONSOR_BASELINE", sponsorFunding: { hash: sponsorFundingHash,
+        amount: sponsorFundingAmount.toString(), receiptStatus: fundingReceipt?.status ?? "NO_NEW_FUNDING_REQUIRED",
+        sponsorBalanceAfter: String(fundedSponsorBalance), researcherBalanceBefore: String(initialResearcherBalance),
+        researcherBalanceAfterFunding: String(await evmBalance(researcherClient, researcher)) } });
     } else {
-      fundedSponsorBalance = await waitForBalanceAtLeast(researcherClient, sponsorAccount.address, SPONSOR_REWARD);
+      saveRun({ phase: "RESUMING_EXISTING_DOSSIER", sponsorFunding: { skipped: "dossier and sponsor funding are already finalized" } });
     }
-    const fundingReceipt = sponsorFundingHash ? await waitForEvmReceipt(researcherClient, sponsorFundingHash) : null;
-    saveRun({ phase: "SPONSOR_BASELINE", sponsorFunding: { hash: sponsorFundingHash,
-      amount: sponsorFundingAmount.toString(), receiptStatus: fundingReceipt?.status ?? "NO_NEW_FUNDING_REQUIRED",
-      sponsorBalanceAfter: String(fundedSponsorBalance), researcherBalanceBefore: String(initialResearcherBalance),
-      researcherBalanceAfterFunding: String(await evmBalance(researcherClient, researcher)) } });
 
     const baselineUrl = "https://api.github.com/repos/openai/codex/git/trees/main";
     const baselineClaim = "The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text.";
@@ -274,8 +280,11 @@ export default async function main(researcherClient: GenLayerClient<any>) {
       researcherWalletBeforeWithdrawal: String(await evmBalance(researcherClient, researcher)) });
 
     const walletBefore = await evmBalance(researcherClient, researcher);
-    let withdrawalTx = String(previous?.withdrawalTx ?? "");
-    let childHash = String(previous?.childHash ?? "");
+    // Resume hashes belong to this failed run only. A prior E2E can have the
+    // same recipient, payout amount, and even a finalized child, but it must
+    // never be mistaken for delivery from this Hub or dossier.
+    let withdrawalTx = resuming ? String(previous?.withdrawalTx ?? "") : "";
+    let childHash = resuming ? String(previous?.childHash ?? "") : "";
     if (!withdrawalTx && BigInt(creditBefore) > 0n) {
       withdrawalTx = await write(researcherClient, hub, "withdraw", []);
       const childHashes: string[] = await (researcherClient as any).getTriggeredTransactionIds({ hash: withdrawalTx as TransactionHash });
@@ -300,7 +309,7 @@ export default async function main(researcherClient: GenLayerClient<any>) {
       || BigInt(pendingWithdrawal.amount) !== BigInt(creditBefore)) {
       throw new Error(`Authoritative pending withdrawal does not match the emitted payment: ${JSON.stringify(pendingWithdrawal)}`);
     }
-    let reconcileTx = String(previous?.reconcileTx ?? "");
+    let reconcileTx = resuming ? String(previous?.reconcileTx ?? "") : "";
     let reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
     if (reconciledWithdrawal.status === "PENDING") {
       reconcileTx = await write(researcherClient, hub, "reconcile_withdrawal", [pendingWithdrawal.id, withdrawalTx, childHash]);

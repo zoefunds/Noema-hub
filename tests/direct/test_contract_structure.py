@@ -115,14 +115,14 @@ def test_payout_reconciliation_requires_exact_parent_child_receipt_linkage():
     exec(compile(ast.Module(body=functions, type_ignores=[]), "payout_receipt_helpers", "exec"), namespace)
     recipient, hub = "0x" + "7" * 40, "0x" + "8" * 40
     parent_id, child_id = "0x" + "1" * 64, "0x" + "2" * 64
-    parent = {"tx_id": parent_id, "status": "FINALIZED", "created_at": "2026-10-16T10:00:00.500000+00:00",
+    parent = {"tx_id": parent_id, "status": "FINALIZED", "created_at": "2026-10-16T10:00:00.878931+00:00",
         "data": {"calldata": "DgZtZXRob2REd2l0aGRyYXc="}, "from_address": recipient,
         "to_address": hub, "triggered_transactions": [child_id],
         "messages": [{"recipient": recipient, "value": "0x3", "onAcceptance": False}]}
     child = {"tx_id": child_id, "status": "FINALIZED", "triggered_by": parent_id,
         "from_address": hub, "to_address": recipient, "value": "3", "value_credited": True}
     check = namespace["_payout_receipt_outcome"]
-    args = (parent_id, child_id, hub, recipient, 3, "2026-10-16T10:00:00.500000+00:00")
+    args = (parent_id, child_id, hub, recipient, 3, "2026-10-16T10:00:00+00:00")
     assert check(parent, child, *args) == "DELIVERED"
     assert check(parent, {**child, "value_credited": False}, *args) == "FAILED"
     assert check(parent, {**child, "value_credited": None}, *args) == "INVALID"
@@ -131,6 +131,7 @@ def test_payout_reconciliation_requires_exact_parent_child_receipt_linkage():
     assert check({**parent, "messages": []}, child, *args) == "INVALID"
     assert check({**parent, "triggered_transactions": []}, child, *args) == "DELIVERED"
     assert check({**parent, "created_at": "2026-10-15T10:00:00.500000+00:00"}, child, *args) == "INVALID"
+    assert check({**parent, "created_at": "2026-10-16T10:00:01.000001+00:00"}, child, *args) == "INVALID"
     assert check({**parent, "data": {"calldata": "other-call"}}, child, *args) == "INVALID"
     assert check(parent, {**child, "status": "ACCEPTED"}, *args) == "PENDING"
     assert check(parent, child, "0x" + "4" * 64, child_id, hub, recipient, 3, args[-1]) == "INVALID"
