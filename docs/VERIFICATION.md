@@ -23,7 +23,7 @@ The current local run passed 38 direct contract tests and 13 frontend tests, plu
 
 At commit `d162a9922353c5de4194ee79d24a807818218413`, the same release commands passed locally: 19 direct contract tests, 3 frontend tests, both TypeScript checks, and the optimized Next.js production build. GitHub Actions run `38856609580` did not allocate a runner or execute a single step. Both jobs contain GitHub's annotation: `The job was not started because your account is locked due to a billing issue.` Restoring hosted CI therefore requires the repository owner to resolve the GitHub account billing lock; the workflow itself remains reproducible through the commands above.
 
-The latest push, commit `6234074`, triggered [GitHub Actions run 38896311767](https://github.com/zoefunds/Noema-hub/actions/runs/38896311767). Both jobs failed before starting and report `steps: []`; there is no hosted green run to claim. Local gates passed in this environment: 38 contract tests, 13 frontend tests, typecheck, and production build. The funded lifecycle below was run through GenLayerJS, not initiated from a connected browser wallet.
+The final release-record push, commit `4ff60e6`, triggered [GitHub Actions run 38899527179](https://github.com/zoefunds/Noema-hub/actions/runs/38899527179). Both jobs failed before starting and report `steps: []`; there is no hosted green run to claim. Local gates passed in this environment: 38 contract tests, 13 frontend tests, 4 signer-safety tests, typecheck, and production build. The funded lifecycle below was run through GenLayerJS, not initiated from a connected browser wallet.
 
 The published manifest parity vector is:
 
