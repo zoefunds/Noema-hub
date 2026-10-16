@@ -98,6 +98,21 @@ def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
     assert "self._credit(account, amount)" in hub
 
 
+def test_pending_withdrawal_is_serialized_per_recipient_and_uses_monotonic_ids():
+    tree = ast.parse(HUB.read_text())
+    contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
+    withdraw = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "withdraw")
+    source = ast.unparse(withdraw)
+    pending_guard = source.index("if pending > 0")
+    clear_credit = source.index("self.credits[account] = u256(0)")
+    nonce_increment = source.index("self.withdrawal_nonce[account] = u256(nonce + 1)")
+    append_outbound = source.index("self.pending_outbound_total = u256(int(self.pending_outbound_total) + amount)")
+    external_send = source.index("_EvmRecipient(Address(str(account))).emit_transfer")
+    assert pending_guard < clear_credit < append_outbound < nonce_increment < external_send
+    assert "reconcile the existing withdrawal before starting another" in source
+    assert "withdrawal_id in self.withdrawals" in source
+
+
 def test_external_payout_failure_is_explicitly_not_claimed_as_recoverable():
     hub = HUB.read_text()
     verification = (ROOT / "docs" / "VERIFICATION.md").read_text()
