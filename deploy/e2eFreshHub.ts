@@ -295,6 +295,22 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     if (childStatus !== "FINALIZED" || !valueCredited || recipient !== researcher.toLowerCase() || value !== BigInt(creditBefore)) {
       throw new Error(`Outgoing child did not prove exact successful delivery: ${JSON.stringify(normalize(child))}`);
     }
+    const pendingWithdrawal = await read(researcherClient, hub, "get_latest_withdrawal", [researcher]);
+    if (!pendingWithdrawal?.id || pendingWithdrawal.recipient.toLowerCase() !== researcher.toLowerCase()
+      || BigInt(pendingWithdrawal.amount) !== BigInt(creditBefore)) {
+      throw new Error(`Authoritative pending withdrawal does not match the emitted payment: ${JSON.stringify(pendingWithdrawal)}`);
+    }
+    let reconcileTx = String(previous?.reconcileTx ?? "");
+    let reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
+    if (reconciledWithdrawal.status === "PENDING") {
+      reconcileTx = await write(researcherClient, hub, "reconcile_withdrawal", [pendingWithdrawal.id, withdrawalTx, childHash]);
+      reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
+    }
+    if (reconciledWithdrawal.status !== "DELIVERED"
+      || reconciledWithdrawal.parent_tx.toLowerCase() !== withdrawalTx.toLowerCase()
+      || reconciledWithdrawal.child_tx.toLowerCase() !== childHash.toLowerCase()) {
+      throw new Error(`Final payout reconciliation did not confirm exact delivery: ${JSON.stringify(reconciledWithdrawal)}`);
+    }
     const creditAfter = await read(researcherClient, hub, "get_credit", [researcher]);
     let walletAfter = await evmBalance(researcherClient, researcher);
     for (let attempt = 0; attempt < 60 && BigInt(walletAfter) < BigInt(walletBefore) + BigInt(creditBefore); attempt += 1) {
@@ -314,6 +330,7 @@ export default async function main(researcherClient: GenLayerClient<any>) {
       dossierId, sponsorTx, baselineUrl, baselineClaim, afterBaseline, url, claim, commitment, submissionId, sealTx, revealTx,
       resolvedDossier: resolved, finalSubmission: submission, creditBeforeWithdrawal: creditBefore, creditAfterWithdrawal: creditAfter,
       withdrawalTx, childHash, childStatus, execution, recipient, value: value.toString(), valueCredited,
+      withdrawalId: pendingWithdrawal.id, reconcileTx, reconciledWithdrawal,
       walletBefore: String(walletBefore), walletAfter: String(walletAfter), duplicateRejected,
       statsBeforeWithdrawal: statsBefore, statsAfterWithdrawal: statsAfter };
   } catch (error) {

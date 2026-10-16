@@ -151,6 +151,15 @@ def test_failed_payout_restoration_accounts_for_actual_backing_loss_only():
     assert realized_loss(amount, 20, 0, amount + 20, 0) == amount
 
 
+def test_live_e2e_requires_authoritative_payout_reconciliation():
+    e2e = (ROOT / "deploy" / "e2eFreshHub.ts").read_text()
+    assert '"reconcile_withdrawal"' in e2e
+    assert '"get_withdrawal"' in e2e
+    assert 'reconciledWithdrawal.status !== "DELIVERED"' in e2e
+    assert 'reconciledWithdrawal.parent_tx.toLowerCase()' in e2e
+    assert 'reconciledWithdrawal.child_tx.toLowerCase()' in e2e
+
+
 def test_bounds_and_timeout_rollback_are_explicit():
     hub = HUB.read_text()
     assert "MAX_LIFETIME_SUBMISSIONS = 72" in hub
