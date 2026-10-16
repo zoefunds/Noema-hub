@@ -10,8 +10,16 @@
     "txStatus": "FINALIZED",
     "txResult": "MAJORITY_AGREE",
     "callbackTxHash": "0x5af7dd2321042920d4f0ce7122f3d3420c085e5e3721be33010e8b22c2882a5f",
-    "callbackStatusAtLastCheck": "PROPOSING",
-    "dossierStateAtLastCheck": "BASELINE_WITNESSING",
+    "callbackStatusAtLastCheck": "FINALIZED / MAJORITY_AGREE",
+    "dossierStateAtLastCheck": "BASELINE_DECISION",
+    "callbackFinalizedAt": "2026-10-16T07:47:00Z",
+    "baselineEvidence": {
+      "id": "base-1",
+      "url": "https://raw.githubusercontent.com/openai/codex/main/README.md",
+      "httpStatus": 200,
+      "contentDigest": "ba4e1f69ff48386e72a9c5e1edaf76aad64a475c2d51af79ccba6d1128261ba7",
+      "manifestRoot": "a425deab916a8a591b8d765ba5f4d466b0fe9f8008f5fb846d995d3ea8a0b46a"
+    },
     "fixtureMismatch": "The deployed CLI bundle still submitted the previous README baseline and license question. No candidate or withdrawal was submitted to this dossier.",
     "verified": false
   },
