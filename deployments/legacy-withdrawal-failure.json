@@ -1,0 +1,17 @@
+{
+  "network": "studionet",
+  "deploymentHub": "0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3",
+  "withdrawalParent": "0xfe3b17000d5b177695453a50a772f330d296c996210bcfa32649966e9e8d6877",
+  "failedChild": "0xbc706f67966cff0a9f407748c1d09f126b153a182fb936340853f9e88156b744",
+  "amountAttoGen": "1100000000000000",
+  "childStatus": "FINALIZED",
+  "childExecution": "ERROR",
+  "childResult": "Contract 0x7452084E1Cf767bf19C743051cFf27D9F7A87a4D not found",
+  "valueCredited": false,
+  "oldHubCreditBefore": "1100000000000000",
+  "oldHubCreditAfter": "0",
+  "recipientWalletBefore": "10029599999999999997",
+  "recipientWalletAfter": "10029599999999999997",
+  "callbackObserved": false,
+  "recoverability": "The payout did not reach the recipient, and the old immutable Hub now reports zero claimable credit. No user-callable recovery method exists on that deployment. Recovery is not available through Noema; whether GenLayer operators can recover the value at protocol level is unverified."
+}

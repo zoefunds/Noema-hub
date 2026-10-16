@@ -23,6 +23,8 @@ The direct suite covers authenticated callbacks, contribution necessity, candida
 
 At commit `d162a9922353c5de4194ee79d24a807818218413`, the same release commands passed locally: 19 direct contract tests, 3 frontend tests, both TypeScript checks, and the optimized Next.js production build. GitHub Actions run `38856609580` did not allocate a runner or execute a single step. Both jobs contain GitHub's annotation: `The job was not started because your account is locked due to a billing issue.` Restoring hosted CI therefore requires the repository owner to resolve the GitHub account billing lock; the workflow itself remains reproducible through the commands above.
 
+After the payout and HTTP retry changes, the same local gates passed again: 32 direct contract tests, 4 frontend tests, both TypeScript checks, and the optimized production build. Hosted CI remains subject to the recorded account billing lock. The funded live lifecycle in this artifact was run through GenLayer JS, not through an injected browser wallet; the deployed browser flow now checks the outgoing child and persists pending verification state, but the browser-originated lifecycle remains unverified because desktop browser automation permissions were unavailable.
+
 The published manifest parity vector is:
 
 ```text
@@ -61,5 +63,7 @@ The prior internal-message attempt on an earlier deployment failed and its callb
 - recipient balance changed from `10029199999999999997` to `10030299999999999997` atto GEN;
 - Hub credit changed from `1100000000000000` to `0` and `accounting_ok=true`;
 - a second withdrawal with no credit was rejected.
+
+The earlier `0.0011 GEN` from Hub `0x49Cb…FcF3` is not recoverable through Noema: its old immutable Hub now reports zero credit, the child did not credit the EOA, and that deployment has no user-callable recovery method. The network record does not establish whether GenLayer operators can recover the value at protocol level. Full evidence is retained in `deployments/legacy-withdrawal-failure.json`.
 
 The browser flow now distinguishes parent success from actual child delivery. It requires a finalized child receipt matching the recipient and amount, `value_credited=true`, an observed wallet increase of at least the payment amount, and a fresh Hub credit readback of zero before displaying success. This browser code is deployed; a desktop browser-originated full lifecycle was not exercised because desktop accessibility/screen-recording permissions remained pending during this run. The real funded network lifecycle was executed through the GenLayer client.
