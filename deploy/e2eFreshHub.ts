@@ -69,12 +69,14 @@ function assertSuccess(receipt: any, operation: string): void {
   const nestedSuccess = String(leader?.execution_result ?? "").toUpperCase() === "SUCCESS"
     && String(leader?.result?.status ?? "").toLowerCase() === "return";
   if (status !== "FINALIZED" || !(execution === "FINISHED_WITH_RETURN" || execution === "FINISHEDWITHRETURN" || nestedSuccess)) {
-    throw new Error(`${operation} failed: ${status || "UNKNOWN"} / ${execution || "UNKNOWN"}`);
+    throw new Error(`${operation} failed: ${status || "UNKNOWN"} / ${execution || "UNKNOWN"}; receipt=${JSON.stringify(normalize(receipt))}`);
   }
 }
 
-async function write(client: GenLayerClient<any>, address: `0x${string}`, method: string, args: unknown[] = [], value = 0n): Promise<string> {
+async function write(client: GenLayerClient<any>, address: `0x${string}`, method: string, args: unknown[] = [], value = 0n,
+  onSubmitted?: (hash: string) => void): Promise<string> {
   const hash = await client.writeContract({ address, functionName: method, args: args as any[], value });
+  onSubmitted?.(String(hash));
   const receipt = await retryTransient(`${method} finality`, () => client.waitForTransactionReceipt({ hash: hash as TransactionHash,
     status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 } as any));
   assertSuccess(receipt, method);
@@ -341,7 +343,9 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     let reconcileTx = resuming ? String(previous?.reconcileTx ?? "") : "";
     let reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
     if (reconciledWithdrawal.status === "PENDING") {
-      reconcileTx = await write(researcherClient, hub, "reconcile_withdrawal", [pendingWithdrawal.id, withdrawalTx, childHash]);
+      reconcileTx = await write(researcherClient, hub, "reconcile_withdrawal", [pendingWithdrawal.id, withdrawalTx, childHash], 0n,
+        (hash) => saveRun({ phase: "RECONCILE_PENDING", reconcileTx: hash, withdrawalId: pendingWithdrawal.id,
+          withdrawalParent: withdrawalTx, withdrawalChild: childHash }));
       reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
     }
     if (reconciledWithdrawal.status !== "DELIVERED"
