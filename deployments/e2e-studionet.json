@@ -11,8 +11,12 @@
     "txResult": "MAJORITY_AGREE",
     "callbackTxHash": "0x5af7dd2321042920d4f0ce7122f3d3420c085e5e3721be33010e8b22c2882a5f",
     "callbackStatusAtLastCheck": "FINALIZED / MAJORITY_AGREE",
-    "dossierStateAtLastCheck": "BASELINE_DECISION",
+    "dossierStateAtLastCheck": "OPEN",
     "callbackFinalizedAt": "2026-10-16T07:47:00Z",
+    "baselineDecisionTxHash": "0xb01f644d50b99732d0d7d2d0768cf6fa7e5a97e2a7f4dc71891d0e094d87f00b",
+    "baselineDecisionStatus": "FINALIZED / MAJORITY_AGREE",
+    "baselineDecisionChildTxHash": "0x4062dc38f08bb4df0438337c198ccb79b729e491902629a72c0f5e107230324b",
+    "openAtLastCheck": true,
     "baselineEvidence": {
       "id": "base-1",
       "url": "https://raw.githubusercontent.com/openai/codex/main/README.md",
