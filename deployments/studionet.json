@@ -2,46 +2,47 @@
   "product": "Noema",
   "network": "studionet",
   "chainId": 61999,
-  "sourceCommit": "786b63f27bff34c79131b230dbe5dddc5574e890",
+  "sourceCommit": "835353960b9568327cc34ffc28a74713392c8d24",
   "nativePayoutsEnabled": true,
   "rpc": "https://studio.genlayer.com/api",
   "explorer": "https://explorer-studio.genlayer.com",
-  "deployedAt": "2026-10-16T08:13:49.140Z",
+  "deployedAt": "2026-10-16T08:37:25.323Z",
+  "productionWebDeployment": {
+    "id": "dpl_EPUKWxuCnxaMQgA6FNYRgXkr7PAz",
+    "url": "https://neoma-h3taob2uo-adebiyi2002gmailcoms-projects.vercel.app",
+    "alias": "https://neoma-hub.vercel.app",
+    "status": "READY",
+    "deployedAt": "2026-10-16T09:18:00Z"
+  },
   "contracts": {
     "hub": {
-      "address": "0x99aaE7794Be988833CbC536cEaaE8e94E8eB1c5B",
-      "txHash": "0x7497c6b5070df03e55e314dc5bf1c9a9fcd596fdf5cbfbb09a638fcb9639efd7"
+      "address": "0xB62714FDc8B0240360616Cb24e69D2B819Cda0F8",
+      "txHash": "0xda1375a3fdf912bd0316ef16a6a947c3445b9b225cde41e81f13082f731b6174",
+      "sourceSha256": "4020e8edfedf1ec763d7576f3687b9832a9e2b3cff5f19aaae0a79b92d863d80",
+      "retrievedSourceSha256": "4020e8edfedf1ec763d7576f3687b9832a9e2b3cff5f19aaae0a79b92d863d80",
+      "deployedSourceMatchesLocal": true,
+      "sourceFile": "contracts/noema_hub.py",
+      "deployedSourceVerification": "GenLayerJS getContractCode exact SHA-256 comparison"
     },
     "witness": {
-      "address": "0x9aAe228eAaf7D4806498F0c189320Ec89d7069d0",
-      "txHash": "0x27fe90f8b0e1a27d14c9e217206790110219e0b4084f9e7bd00fd689a2b36b27"
+      "address": "0x1413B9687045b539e74AEE323b119a7B19dCBBF6",
+      "txHash": "0xa7f5638a77a80ce3c21351625086c6b1f95dee0d0ce1704000007ba0d9e58155",
+      "sourceSha256": "0f4ef7d4cc9b7b73ac98bed4d207b1240a1f0854f775e30b874e8e520b376a33",
+      "retrievedSourceSha256": "0f4ef7d4cc9b7b73ac98bed4d207b1240a1f0854f775e30b874e8e520b376a33",
+      "deployedSourceMatchesLocal": true,
+      "sourceFile": "contracts/source_witness.py",
+      "deployedSourceVerification": "GenLayerJS getContractCode exact SHA-256 comparison"
     },
     "engine": {
-      "address": "0xB9fBD0e65275853f8ba45E4Eb0502FB8c3187bbA",
-      "txHash": "0x00278011cc0762cdf469a520738cef6e70a03522aeb981c6850efc0923b305b3"
+      "address": "0x2406AE364F5c58f5069418CfF71c00faBb82F67A",
+      "txHash": "0xa445a2575a5654b02bcf1a4b9de3a7198894b6ed97804746a3e5e9d9a1208cc2",
+      "sourceSha256": "7085da39128709f465d30b3fce9988b21fecff9b17d2edc624305e5a625ce026",
+      "retrievedSourceSha256": "7085da39128709f465d30b3fce9988b21fecff9b17d2edc624305e5a625ce026",
+      "deployedSourceMatchesLocal": true,
+      "sourceFile": "contracts/verdict_engine.py",
+      "deployedSourceVerification": "GenLayerJS getContractCode exact SHA-256 comparison"
     },
-    "configureTxHash": "0x768f91cd244d2caf791d6c32c1268e13bd30df3dcddaa22172b65b511335b6e8"
+    "configureTxHash": "0xf5e676e5a3e44a80e96244fafc00a7b7875960cfbce99addf7047bc6b473640d"
   },
-  "deploymentVerification": {
-    "finalized": true,
-    "workerBindingFinalized": true,
-    "nativePayoutsEnabled": true,
-    "sourceCommit": "786b63f27bff34c79131b230dbe5dddc5574e890",
-    "allLocalSourcesMatchDeployedCode": true,
-    "contracts": {
-      "hubSha256": "4020e8edfedf1ec763d7576f3687b9832a9e2b3cff5f19aaae0a79b92d863d80",
-      "witnessSha256": "0f4ef7d4cc9b7b73ac98bed4d207b1240a1f0854f775e30b874e8e520b376a33",
-      "engineSha256": "7085da39128709f465d30b3fce9988b21fecff9b17d2edc624305e5a625ce026"
-    }
-  },
-  "frontendProduction": {
-    "deploymentId": "dpl_AK1vXjLn36pqUgN8Sn52yGPSZhFv",
-    "url": "https://neoma-hub.vercel.app",
-    "readyState": "READY",
-    "healthCheck": "2026-10-16T08:15:53.049Z",
-    "chainId": 61999,
-    "hub": "0x99aaE7794Be988833CbC536cEaaE8e94E8eB1c5B",
-    "hubCodeAvailable": true,
-    "smokeRoutes": ["/", "/field", "/field/new", "/field/noema-1", "/method", "/vault"]
-  }
+  "deployedSourceVerification": "Exact source equality verified through GenLayerJS getContractCode for Hub, Witness, and Engine."
 }

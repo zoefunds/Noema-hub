@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type { DecodedDeployData, GenLayerClient, TransactionHash } from "genlayer-js/types";
 import { TransactionStatus } from "genlayer-js/types";
 
@@ -25,6 +26,18 @@ async function deploy(client: GenLayerClient<any>, file: string, args: unknown[]
   return { address: String(address), txHash: String(hash) };
 }
 
+async function verifyDeployedSource(client: GenLayerClient<any>, name: string, file: string, address: string) {
+  const localCode = readFileSync(path.resolve(process.cwd(), file));
+  const localSha256 = createHash("sha256").update(localCode).digest("hex");
+  const deployedCode = await client.getContractCode(address as `0x${string}`);
+  const deployedSha256 = createHash("sha256").update(deployedCode, "utf8").digest("hex");
+  if (deployedSha256 !== localSha256) {
+    throw new Error(`${name} deployed source mismatch: local ${localSha256}, deployed ${deployedSha256}`);
+  }
+  return { sourceFile: file, sourceSha256: localSha256, retrievedSourceSha256: deployedSha256,
+    deployedSourceMatchesLocal: true, deployedSourceVerification: "GenLayerJS getContractCode exact SHA-256 comparison" };
+}
+
 export default async function main(client: GenLayerClient<any>) {
   const chainId = Number((client as any)?.chain?.id);
   if (chainId !== 61999) throw new Error(`Noema deployment is locked to Studionet 61999; received ${chainId}`);
@@ -47,11 +60,18 @@ export default async function main(client: GenLayerClient<any>) {
     status: TransactionStatus.FINALIZED, retries: 240, interval: 5000 } as any);
   if (!receiptAccepted(configureReceipt)) throw new Error(`One-time worker binding failed: ${JSON.stringify(configureReceipt)}`);
 
+  const verifiedHub = await verifyDeployedSource(client, "Hub", "contracts/noema_hub.py", hub.address);
+  const verifiedWitness = await verifyDeployedSource(client, "Witness", "contracts/source_witness.py", witness.address);
+  const verifiedEngine = await verifyDeployedSource(client, "Engine", "contracts/verdict_engine.py", engine.address);
+
   const manifest = { product: "Noema", network: "studionet", chainId: 61999,
     sourceCommit: process.env.NOEMA_SOURCE_COMMIT || "UNRECORDED",
     nativePayoutsEnabled: enableNativePayouts,
     rpc: "https://studio.genlayer.com/api", explorer: "https://explorer-studio.genlayer.com",
-    deployedAt: new Date().toISOString(), contracts: { hub, witness, engine, configureTxHash: String(configureHash) } };
+    deployedAt: new Date().toISOString(),
+    deployedSourceVerification: "Exact source equality verified through GenLayerJS getContractCode for all three contracts.",
+    contracts: { hub: { ...hub, ...verifiedHub }, witness: { ...witness, ...verifiedWitness },
+      engine: { ...engine, ...verifiedEngine }, configureTxHash: String(configureHash) } };
   mkdirSync(path.resolve(process.cwd(), "deployments"), { recursive: true });
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   writeFileSync(path.resolve(process.cwd(), "frontend/.env.local"), [
