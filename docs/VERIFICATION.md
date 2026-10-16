@@ -19,7 +19,7 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run build
 ```
 
-The direct suite covers authenticated callbacks, contribution necessity, candidate-independent verdict rejection, the executable 12-ID decisive bound, HTTP 2xx enforcement, requested-versus-verified provenance, manifest-root parity, timeout recovery, queue and lifetime bounds, and failed outbound-transfer recovery structure. Frontend tests cover modern and legacy successful execution receipts as well as finalized execution errors and non-final receipts.
+The direct suite covers authenticated callbacks, contribution necessity, candidate-independent verdict rejection, the executable 12-ID decisive bound, HTTP 2xx enforcement, requested-versus-verified provenance, manifest-root parity, timeout recovery, queue and lifetime bounds, and internal-message error recovery. It does not simulate an external EOA transfer failure. Frontend tests cover modern and legacy successful execution receipts as well as finalized execution errors and non-final receipts.
 
 At commit `d162a9922353c5de4194ee79d24a807818218413`, the same release commands passed locally: 19 direct contract tests, 3 frontend tests, both TypeScript checks, and the optimized Next.js production build. GitHub Actions run `38856609580` did not allocate a runner or execute a single step. Both jobs contain GitHub's annotation: `The job was not started because your account is locked due to a billing issue.` Restoring hosted CI therefore requires the repository owner to resolve the GitHub account billing lock; the workflow itself remains reproducible through the commands above.
 
@@ -37,7 +37,7 @@ manifest root: 9f18409690f81c54c257d64c0e15572e7c77674afa5c7707de57e4411c87f000
 
 ## StudioNet resolution proof
 
-The current production safety deployment is Hub `0x8AF8731fC1143010dD9b21e8B357A0Ca9D1644b6`, Witness `0x366815EC7f963786E8A0d6Ec7c10bb38aE989D0b`, and Engine `0x3baDCAf04b067B212Cd51fBf8FA95ef8DC209796`. Its sponsor phase reached `noema-3`; repeated researcher calls encountered a StudioNet receipt with `FINALIZED` but no execution-result field at `seal_disclosure`, so this new deployment is not represented as a completed resolution until that receipt is independently replayed. The earlier completed resolution remains preserved in Git history and the prior acceptance artifact.
+The current deployed addresses and exact source hashes are recorded in `deployments/studionet.json`. The fully completed live resolution is recorded in `deployments/e2e-studionet.json` for dossier `noema-4`; its exact finalized payout is also described below. Older deployment attempts and their incomplete states are historical records, not the current deployment or current acceptance result.
 
 The complete machine-readable record is in `deployments/e2e-studionet.json`. The final hardened deployment resolved a real public question using first-party files from the official `openai/codex` repository:
 
@@ -65,5 +65,7 @@ The prior internal-message attempt on an earlier deployment failed and its callb
 - a second withdrawal with no credit was rejected.
 
 The earlier `0.0011 GEN` from Hub `0x49Cb…FcF3` is not recoverable through Noema: its old immutable Hub now reports zero credit, the child did not credit the EOA, and that deployment has no user-callable recovery method. The network record does not establish whether GenLayer operators can recover the value at protocol level. Full evidence is retained in `deployments/legacy-withdrawal-failure.json`.
+
+External payout failure remains a protocol-level limitation, not a completed recovery feature. The Hub records the external transfer as pending and debits claimable credit when it emits the transfer; the EOA child message does not invoke the Hub's `__on_errored_message__` callback. We intentionally do not provide a permissionless or timeout-based re-credit path: without an authenticated final child receipt, that could restore credit after a delayed successful payout and permit double payment. The browser retains the parent hash and only reports success after verifying the finalized child receipt and wallet balance delta, but browser verification cannot re-credit the immutable Hub. A trustless recovery requires a runtime-authenticated external-message failure callback or an on-chain receipt proof supported by the target network. Until then, a failed external payout must remain visibly unresolved and must not be described as automatically recoverable.
 
 The browser flow now distinguishes parent success from actual child delivery. It requires a finalized child receipt matching the recipient and amount, `value_credited=true`, an observed wallet increase of at least the payment amount, and a fresh Hub credit readback of zero before displaying success. This browser code is deployed; a desktop browser-originated full lifecycle was not exercised because desktop accessibility/screen-recording permissions remained pending during this run. The real funded network lifecycle was executed through the GenLayer client.

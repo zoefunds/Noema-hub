@@ -5,6 +5,7 @@ import { createAccount, createClient, generatePrivateKey } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import { TransactionHashVariant, TransactionStatus } from "genlayer-js/types";
 import type { GenLayerClient, TransactionHash } from "genlayer-js/types";
+import { selectSponsorKey, sweepableSponsorBalance } from "./sponsorKey.js";
 
 const E2E_PATH = path.resolve(process.cwd(), "deployments/e2e-studionet.json");
 const RPC_ENDPOINT = "https://studio.genlayer.com/api";
@@ -110,7 +111,8 @@ async function waitForBalanceAtLeast(client: GenLayerClient<any>, address: `0x${
   return balance;
 }
 
-async function sweepTemporarySponsor(sponsorClient: GenLayerClient<any>, researcher: `0x${string}`): Promise<any> {
+async function sweepTemporarySponsor(sponsorClient: GenLayerClient<any>, researcher: `0x${string}`,
+  maximumSweep?: bigint): Promise<any> {
   const wallet: any = sponsorClient;
   const sponsorAddress = wallet.account?.address;
   if (!sponsorAddress) return { attempted: false, reason: "temporary sponsor address unavailable" };
@@ -118,7 +120,8 @@ async function sweepTemporarySponsor(sponsorClient: GenLayerClient<any>, researc
   const gasPriceRaw = await rawRpc("eth_gasPrice", []);
   const gasPrice = BigInt(String(gasPriceRaw));
   const gasReserve = gasPrice * 30_000n;
-  const amount = balance > gasReserve ? balance - gasReserve : 0n;
+  const spendable = balance > gasReserve ? balance - gasReserve : 0n;
+  const amount = maximumSweep === undefined || maximumSweep > spendable ? spendable : maximumSweep;
   if (amount <= 0n) return { attempted: false, balance: balance.toString(), gasReserve: gasReserve.toString() };
   const hash = await wallet.sendTransaction({ to: researcher, value: amount } as any);
   const receipt = await waitForEvmReceipt(sponsorClient, String(hash));
@@ -139,9 +142,11 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     throw new Error("Fresh Hub E2E requires a clean Hub; refusing to replace or append to unknown test state");
   }
 
-  let privateKey = generatePrivateKey();
-  let temporaryKeyFile = path.join("/private/tmp", `noema-e2e-sponsor-${Date.now()}-${process.pid}.key`);
-  if (previous?.temporaryKeyFile && existsSync(previous.temporaryKeyFile) && previous.hub === hub) {
+  const selection = selectSponsorKey(process.env.NOEMA_E2E_SPONSOR_PRIVATE_KEY, generatePrivateKey());
+  let privateKey = selection.privateKey;
+  let temporaryKeyFile: string | undefined = selection.persistUntilSweep
+    ? path.join("/private/tmp", `noema-e2e-sponsor-${Date.now()}-${process.pid}.key`) : undefined;
+  if (selection.persistUntilSweep && previous?.temporaryKeyFile && existsSync(previous.temporaryKeyFile) && previous.hub === hub) {
     const priorKey = readFileSync(previous.temporaryKeyFile, "utf8").trim() as `0x${string}`;
     const priorAccount = createAccount(priorKey);
     if (priorAccount.address.toLowerCase() === String(previous.sponsor).toLowerCase()) {
@@ -150,22 +155,36 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     }
   }
   const sponsorAccount = createAccount(privateKey);
+  if (sponsorAccount.address.toLowerCase() === researcher.toLowerCase()) {
+    throw new Error("Fresh Hub E2E requires distinct sponsor and researcher accounts");
+  }
+  if (resuming && String(previous?.sponsor).toLowerCase() !== sponsorAccount.address.toLowerCase()) {
+    throw new Error("Interrupted E2E sponsor does not match the selected sponsor key; refusing to mix runs");
+  }
   const sponsorClient = createClient({ chain: studionet, endpoint: manifest.rpc, account: sponsorAccount } as any);
-  if (!existsSync(temporaryKeyFile)) writeFileSync(temporaryKeyFile, privateKey, { mode: 0o600, flag: "wx" });
+  if (temporaryKeyFile && !existsSync(temporaryKeyFile)) {
+    writeFileSync(temporaryKeyFile, privateKey, { mode: 0o600, flag: "wx" });
+  }
   // Keep the one-time test key recoverable on disk until the funded account
   // has been swept or its balance is proven to be zero.
   startRun({ ...(resuming ? previous : {}), startedAt: new Date().toISOString(), hub, sponsor: sponsorAccount.address,
-    researcher, sourceCommit: manifest.sourceCommit, temporaryKeyFile, phase: resuming ? "RESUMING" : "PREFLIGHT" });
+    researcher, sourceCommit: manifest.sourceCommit,
+    sponsorKeyHandling: selection.handling,
+    ...(temporaryKeyFile ? { temporaryKeyFile } : {}), phase: resuming ? "RESUMING" : "PREFLIGHT" });
   const initialResearcherBalance = await evmBalance(researcherClient, researcher);
   saveRun({ researcherWalletBeforeFunding: String(initialResearcherBalance), phase: "FUNDING_TEMPORARY_SPONSOR" });
 
   let sponsorFundingHash = previous?.sponsor === sponsorAccount.address ? String(previous.sponsorFundingHash ?? "") : "";
+  let sponsorFundingAmount = 0n;
+  let sponsorOpeningBalance: bigint | null = null;
   let completed: any = null;
   let sponsorSweep: any = null;
   try {
     let fundedSponsorBalance = await evmBalance(researcherClient, sponsorAccount.address);
+    sponsorOpeningBalance = fundedSponsorBalance;
     if (fundedSponsorBalance < SPONSOR_REWARD) {
       const fundingAmount = SPONSOR_FUNDING > fundedSponsorBalance ? SPONSOR_FUNDING - fundedSponsorBalance : 0n;
+      sponsorFundingAmount = fundingAmount;
       sponsorFundingHash = String(await (researcherClient as any).sendTransaction({ to: sponsorAccount.address,
         value: fundingAmount } as any));
       const fundingReceipt = await waitForEvmReceipt(researcherClient, sponsorFundingHash);
@@ -178,7 +197,7 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     }
     const fundingReceipt = sponsorFundingHash ? await waitForEvmReceipt(researcherClient, sponsorFundingHash) : null;
     saveRun({ phase: "SPONSOR_BASELINE", sponsorFunding: { hash: sponsorFundingHash,
-      amount: SPONSOR_FUNDING.toString(), receiptStatus: fundingReceipt?.status ?? "REUSED_PREVIOUSLY_FINALIZED_FUNDING",
+      amount: sponsorFundingAmount.toString(), receiptStatus: fundingReceipt?.status ?? "NO_NEW_FUNDING_REQUIRED",
       sponsorBalanceAfter: String(fundedSponsorBalance), researcherBalanceBefore: String(initialResearcherBalance),
       researcherBalanceAfterFunding: String(await evmBalance(researcherClient, researcher)) } });
 
@@ -291,7 +310,7 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     if (!duplicateRejected) throw new Error("Duplicate withdrawal unexpectedly executed successfully");
 
     completed = { phase: "COMPLETE", finishedAt: new Date().toISOString(), hub, sponsor: sponsorAccount.address,
-      researcher, sponsorFundingHash, sponsorFundingAmount: SPONSOR_FUNDING.toString(), sponsorReward: SPONSOR_REWARD.toString(),
+      researcher, sponsorFundingHash, sponsorFundingAmount: sponsorFundingAmount.toString(), sponsorReward: SPONSOR_REWARD.toString(),
       dossierId, sponsorTx, baselineUrl, baselineClaim, afterBaseline, url, claim, commitment, submissionId, sealTx, revealTx,
       resolvedDossier: resolved, finalSubmission: submission, creditBeforeWithdrawal: creditBefore, creditAfterWithdrawal: creditAfter,
       withdrawalTx, childHash, childStatus, execution, recipient, value: value.toString(), valueCredited,
@@ -302,23 +321,25 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     throw error;
   } finally {
     try {
-      sponsorSweep = await sweepTemporarySponsor(sponsorClient, researcher);
-      if (sponsorSweep.attempted) {
-        const finalBalance = await evmBalance(sponsorClient, sponsorAccount.address);
-        if (finalBalance === 0n) unlinkSync(temporaryKeyFile);
-        else saveRun({ temporaryKeyFile, temporarySponsorBalanceAfterSweep: finalBalance.toString() });
-      } else {
-        const directBalance = await evmBalance(sponsorClient, sponsorAccount.address);
-        if (directBalance === 0n) unlinkSync(temporaryKeyFile);
-        else saveRun({ temporaryKeyFile, temporarySponsorBalanceNotZero: directBalance.toString() });
+      const balanceBeforeSweep = await evmBalance(sponsorClient, sponsorAccount.address);
+      const maximumSweep = sponsorOpeningBalance === null ? (selection.persistUntilSweep ? undefined : 0n)
+        : sweepableSponsorBalance(balanceBeforeSweep, sponsorOpeningBalance, !selection.persistUntilSweep);
+      sponsorSweep = await sweepTemporarySponsor(sponsorClient, researcher, maximumSweep);
+      const finalBalance = await evmBalance(sponsorClient, sponsorAccount.address);
+      if (temporaryKeyFile && finalBalance === 0n && existsSync(temporaryKeyFile)) unlinkSync(temporaryKeyFile);
+      saveRun({ ...(temporaryKeyFile ? { temporaryKeyFile } : {}),
+        temporarySponsorBalanceAfterSweep: finalBalance.toString(), temporarySponsorSweep: sponsorSweep });
+      if (finalBalance > 0n && temporaryKeyFile) {
+        saveRun({ temporaryKeyFile, temporarySponsorBalanceNotZero: finalBalance.toString() });
       }
-      saveRun({ temporarySponsorSweep: sponsorSweep });
     } catch (error) {
-      saveRun({ temporaryKeyFile, temporarySponsorSweepError: error instanceof Error ? error.message : String(error) });
+      saveRun({ ...(temporaryKeyFile ? { temporaryKeyFile } : {}),
+        temporarySponsorSweepError: error instanceof Error ? error.message : String(error) });
     }
   }
   const final = { ...completed, temporarySponsorSweep: sponsorSweep,
-    temporaryKeyFile: existsSync(temporaryKeyFile) ? temporaryKeyFile : "removed after sweep" };
+    ...(temporaryKeyFile ? { temporaryKeyFile: existsSync(temporaryKeyFile) ? temporaryKeyFile : "removed after sweep" }
+      : { sponsorKeyHandling: "provided_ephemerally_not_persisted" }) };
   saveRun(final);
   return normalize(final);
 }

@@ -4,6 +4,7 @@
   "scripts": {
     "test:contracts": "python3 -m pytest tests/direct -q",
     "test:ui": "npm --prefix frontend test",
+    "test:sponsor-key": "node --import tsx --test deploy/sponsorKey.test.ts",
     "typecheck": "npm --prefix frontend run typecheck",
     "build": "npm --prefix frontend run build",
     "e2e:studionet": "node run-studionet-e2e.mjs"

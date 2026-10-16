@@ -97,6 +97,15 @@ def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
     assert "self._credit(account, amount)" in hub
 
 
+def test_external_payout_failure_is_explicitly_not_claimed_as_recoverable():
+    hub = HUB.read_text()
+    verification = (ROOT / "docs" / "VERIFICATION.md").read_text()
+    deployment = (ROOT / "docs" / "DEPLOYMENT.md").read_text()
+    assert "EOA transfers are external EVM messages and do not call this hook" in hub
+    assert "It does not simulate an external EOA transfer failure" in verification
+    assert "timeout or user-directed re-credit could double-pay" in deployment
+
+
 def test_bounds_and_timeout_rollback_are_explicit():
     hub = HUB.read_text()
     assert "MAX_LIFETIME_SUBMISSIONS = 72" in hub
