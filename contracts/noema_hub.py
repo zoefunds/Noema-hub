@@ -19,7 +19,7 @@ MAX_DECISIVE_IDS = 12
 MAX_PAGE = 24
 REVEAL_WINDOW = 1200
 STAGE_WINDOW = 1800
-STUDIONET_RPC = "https://studio.genlayer.com/api"
+PAYOUT_RECEIPT_API = "https://neoma-hub.vercel.app/api/payout-receipt?hash="
 WITHDRAW_CALLDATA = "DgZtZXRob2REd2l0aGRyYXc="
 
 
@@ -157,16 +157,23 @@ def _payout_receipt_outcome(parent, child, parent_id, child_id, hub, recipient, 
 
 
 def _fetch_studionet_transaction(txid):
-    response = gl.nondet.web.request(STUDIONET_RPC, method="POST", body={
-        "jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionByHash", "params": [txid]})
-    status = int(getattr(response, "status_code", getattr(response, "status", 0)))
+    """Read one fixed-hash receipt through the app's read-only StudioNet gateway.
+
+    GenVM validators still perform this GET independently in consensus. The
+    gateway only adapts the public StudioNet RPC POST response to a bounded,
+    fixed-method HTTP GET; it has no write operation or wallet credentials.
+    """
+    if re.fullmatch(r"0x[0-9a-fA-F]{64}", str(txid)) is None:
+        raise ValueError("Invalid StudioNet transaction identifier")
+    response = gl.nondet.web.get(PAYOUT_RECEIPT_API + txid)
+    status = int(getattr(response, "status", 0))
     if status != 200:
         raise ValueError("StudioNet transaction lookup failed")
     body = response.body.decode("utf-8") if isinstance(response.body, bytes) else str(response.body)
-    payload = json.loads(body)
-    if payload.get("error") or not isinstance(payload.get("result"), dict):
-        raise ValueError("StudioNet transaction receipt is unavailable")
-    return payload["result"]
+    transaction = json.loads(body)
+    if not isinstance(transaction, dict) or _tx_id(transaction) != txid.lower():
+        raise ValueError("StudioNet transaction receipt identity mismatch")
+    return transaction
 
 
 def _verify_payout_receipts(parent_id, child_id, hub, recipient, amount, withdrawal_created_at):

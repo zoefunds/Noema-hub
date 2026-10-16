@@ -163,6 +163,15 @@ def test_failed_payout_restoration_accounts_for_actual_backing_loss_only():
     assert realized_loss(amount, 20, 0, amount + 20, 0) == amount
 
 
+def test_payout_receipt_fetch_uses_fixed_hash_only_read_gateway():
+    hub = HUB.read_text()
+    assert 'PAYOUT_RECEIPT_API = "https://neoma-hub.vercel.app/api/payout-receipt?hash="' in hub
+    assert "gl.nondet.web.get(PAYOUT_RECEIPT_API + txid)" in hub
+    assert 're.fullmatch(r"0x[0-9a-fA-F]{64}", str(txid))' in hub
+    assert "_tx_id(transaction) != txid.lower()" in hub
+    assert 'method="POST"' not in hub
+
+
 def test_live_e2e_requires_authoritative_payout_reconciliation():
     e2e = (ROOT / "deploy" / "e2eFreshHub.ts").read_text()
     assert '"reconcile_withdrawal"' in e2e

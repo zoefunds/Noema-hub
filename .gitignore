@@ -12,3 +12,4 @@ frontend/out/
 deployments/local.json
 deploy/*.compiled.js
 artifacts/
+.vercel
