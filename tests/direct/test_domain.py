@@ -125,6 +125,102 @@ def test_document_body_with_unsuccessful_http_status_cannot_be_attested():
     assert classify_http_status(200) == "SUCCESS"
 
 
+@pytest.mark.parametrize(("status", "expected"), [(429, "UNAVAILABLE"), (503, "UNAVAILABLE"), (404, "REJECTED")])
+def test_source_witness_never_semantically_attests_error_response_body(status, expected):
+    import hashlib
+    from types import SimpleNamespace
+
+    source = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
+    tree = ast.parse(source)
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_inspect")
+    body = b"Apache License Version 2.0 - valid documentary content must not override an HTTP error status."
+    calls = []
+
+    class FakeVm:
+        class Return:
+            pass
+
+        @staticmethod
+        def run_nondet_unsafe(leader, _validator):
+            return leader()
+
+    def fake_web_get(_url):
+        return SimpleNamespace(status=status, body=body)
+
+    def fake_exec_prompt(*_args, **_kwargs):
+        calls.append("semantic-evaluation")
+        return {field: True for field in ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
+                                          "materially_new", "internally_consistent")} | {"basis": "Supported."}
+
+    fake_gl = SimpleNamespace(
+        nondet=SimpleNamespace(web=SimpleNamespace(get=fake_web_get), exec_prompt=fake_exec_prompt),
+        vm=FakeVm,
+    )
+    namespace = {
+        "gl": fake_gl,
+        "hashlib": hashlib,
+        "json": json,
+        "MAX_FETCH": 24_000,
+        "FIELDS": ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
+                   "materially_new", "internally_consistent"),
+        "_json": lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+        "_normalize": lambda value: {**value, "status": "ATTESTED"},
+        "_classify_http_status": classify_http_status,
+    }
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "source_witness_inspect", "exec"), namespace)
+    result = namespace["_inspect"]("question", "rule", "policy", "[]", "https://example.org/license", "claim")
+
+    assert result["status"] == expected
+    assert result["http_status"] == status
+    assert result["content_digest"] == hashlib.sha256(body).hexdigest()
+    assert not any(result[field] for field in namespace["FIELDS"])
+    assert calls == []
+
+
+def test_source_witness_runs_semantics_for_a_successful_document_response():
+    import hashlib
+    from types import SimpleNamespace
+
+    source = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
+    tree = ast.parse(source)
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_inspect")
+    body = b"Apache License Version 2.0"
+    calls = []
+    fields = ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
+              "materially_new", "internally_consistent")
+
+    class FakeVm:
+        class Return:
+            pass
+
+        @staticmethod
+        def run_nondet_unsafe(leader, _validator):
+            return leader()
+
+    def fake_exec_prompt(*_args, **_kwargs):
+        calls.append("semantic-evaluation")
+        return {field: True for field in fields} | {"basis": "The source states Apache License Version 2.0."}
+
+    fake_gl = SimpleNamespace(
+        nondet=SimpleNamespace(web=SimpleNamespace(get=lambda _url: SimpleNamespace(status=200, body=body)),
+                               exec_prompt=fake_exec_prompt),
+        vm=FakeVm,
+    )
+    namespace = {
+        "gl": fake_gl, "hashlib": hashlib, "json": json, "MAX_FETCH": 24_000, "FIELDS": fields,
+        "_json": lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+        "_normalize": lambda value: {**value, "status": "ATTESTED"},
+        "_classify_http_status": classify_http_status,
+    }
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "source_witness_inspect", "exec"), namespace)
+    result = namespace["_inspect"]("question", "rule", "policy", "[]", "https://example.org/license", "claim")
+
+    assert result["status"] == "ATTESTED"
+    assert result["http_status"] == 200
+    assert result["content_digest"] == hashlib.sha256(body).hexdigest()
+    assert calls == ["semantic-evaluation"]
+
+
 def classify_http_status(status):
     source = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
     tree = ast.parse(source)
