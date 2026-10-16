@@ -1,0 +1,519 @@
+# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+
+from genlayer import *
+import hashlib
+import json
+import re
+from datetime import datetime, timezone
+
+VERSION = "1.0.0"
+CHAIN_ID = "61999"
+MIN_REWARD = 10 ** 15
+MAX_REWARD = 10 * 10 ** 18
+MIN_BOND = 10 ** 14
+MAX_BASELINE = 4
+MAX_ACTIVE = 24
+MAX_EVIDENCE = 18
+MAX_LIFETIME_SUBMISSIONS = 72
+MAX_PAGE = 24
+REVEAL_WINDOW = 1200
+STAGE_WINDOW = 1800
+
+
+def _now():
+    return int(datetime.fromisoformat(gl.message_raw["datetime"]).timestamp())
+
+
+def _iso():
+    return datetime.fromtimestamp(_now(), tz=timezone.utc).isoformat()
+
+
+def _json(value):
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def _sha(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _text(value, name, maximum, minimum=1):
+    if not isinstance(value, str) or "\x00" in value or not minimum <= len(value.strip()) <= maximum:
+        raise gl.vm.UserError(f"[EXPECTED] invalid {name}")
+    return value.strip()
+
+
+def _address(value, name):
+    value = str(value).replace("addr#", "0x").replace("address#", "0x")
+    if re.fullmatch(r"0x[0-9a-fA-F]{40}", value) is None or int(value[2:], 16) == 0:
+        raise gl.vm.UserError(f"[EXPECTED] invalid {name} address")
+    return value
+
+
+def _commitment(hub, dossier_id, researcher, url, claim, salt):
+    return _sha(_json({"domain": "NOEMA_DISCLOSURE_V1", "chain_id": CHAIN_ID,
+        "hub": hub.lower(), "dossier_id": dossier_id, "researcher": researcher.lower(),
+        "url": url, "claim": claim, "salt": salt}))
+
+
+def _manifest_root(items):
+    return _sha(_json([{"id": i["id"], "claim_digest": i["claim_digest"],
+                        "content_digest": i["content_digest"], "source_host": i["source_host"]}
+                       for i in items]))
+
+
+class NoemaHub(gl.Contract):
+    dossiers: TreeMap[str, str]
+    dossier_ids: DynArray[str]
+    submissions: TreeMap[str, str]
+    commitments: TreeMap[str, str]
+    reservations: TreeMap[str, str]
+    credits: TreeMap[Address, u256]
+    witness_address: str
+    engine_address: str
+    bootstrapper: str
+    configured: bool
+    next_dossier: u256
+    next_submission: u256
+    deposited: u256
+    reward_escrow: u256
+    bond_escrow: u256
+    claimable: u256
+    withdrawn: u256
+
+    def __init__(self, witness_address: str, engine_address: str):
+        self.bootstrapper = str(gl.message.sender_address)
+        self.configured = bool(witness_address and engine_address)
+        self.witness_address = _address(witness_address, "witness") if witness_address else ""
+        self.engine_address = _address(engine_address, "engine") if engine_address else ""
+        self.next_dossier = u256(1)
+        self.next_submission = u256(1)
+        self.deposited = u256(0)
+        self.reward_escrow = u256(0)
+        self.bond_escrow = u256(0)
+        self.claimable = u256(0)
+        self.withdrawn = u256(0)
+
+    @gl.public.write
+    def configure(self, witness_address: str, engine_address: str) -> None:
+        if self.configured or str(gl.message.sender_address).lower() != self.bootstrapper.lower():
+            raise gl.vm.UserError("[EXPECTED] one-time bootstrap only")
+        self.witness_address = _address(witness_address, "witness")
+        self.engine_address = _address(engine_address, "engine")
+        self.configured = True
+        self.bootstrapper = ""
+
+    def _dossier(self, dossier_id):
+        if dossier_id not in self.dossiers:
+            raise gl.vm.UserError("[EXPECTED] dossier not found")
+        return json.loads(self.dossiers[dossier_id])
+
+    def _submission(self, submission_id):
+        if submission_id not in self.submissions:
+            raise gl.vm.UserError("[EXPECTED] submission not found")
+        return json.loads(self.submissions[submission_id])
+
+    def _save_dossier(self, value):
+        self.dossiers[value["id"]] = _json(value)
+
+    def _save_submission(self, value):
+        self.submissions[value["id"]] = _json(value)
+
+    def _credit(self, address, amount):
+        target = Address(address)
+        current = int(self.credits[target]) if target in self.credits else 0
+        self.credits[target] = u256(current + amount)
+        self.claimable = u256(int(self.claimable) + amount)
+
+    def _release_bond(self, submission, recipient):
+        if submission.get("bond_released"):
+            return
+        amount = int(submission["bond_atto"])
+        self.bond_escrow = u256(int(self.bond_escrow) - amount)
+        self._credit(recipient, amount)
+        submission["bond_released"] = True
+
+    def _remove_active(self, dossier, submission_id):
+        dossier["active_ids"] = [x for x in dossier["active_ids"] if x != submission_id]
+        dossier["queue"] = [x for x in dossier["queue"] if x != submission_id]
+        if dossier["pending_id"] == submission_id:
+            dossier["pending_id"] = ""
+
+    def _close_refund(self, dossier, reason):
+        if int(dossier["reward_atto"]) > 0:
+            reward = int(dossier["reward_atto"])
+            self.reward_escrow = u256(int(self.reward_escrow) - reward)
+            self._credit(dossier["sponsor"], reward)
+            dossier["reward_atto"] = "0"
+        dossier["status"] = "CLOSED_REFUNDED"
+        dossier["resolution"] = reason
+        dossier["closed_at"] = _iso()
+        for sid in list(dossier["active_ids"]):
+            submission = self._submission(sid)
+            if submission["status"] == "COMMITTED" and _now() >= int(submission["reveal_deadline"]):
+                submission["status"] = "UNREVEALED"
+                self._release_bond(submission, dossier["sponsor"])
+            else:
+                submission["status"] = "PROTOCOL_BLOCKED"
+                self._release_bond(submission, submission["researcher"])
+            submission["settled_at"] = _iso()
+            self._save_submission(submission)
+        dossier["active_ids"] = []
+        dossier["queue"] = []
+        dossier["pending_id"] = ""
+        self._save_dossier(dossier)
+
+    def _request_witness(self, dossier, request_id, url, claim):
+        dossier["pending_id"] = request_id
+        dossier["stage_deadline"] = str(_now() + STAGE_WINDOW)
+        self._save_dossier(dossier)
+        witness = gl.get_contract_at(Address(self.witness_address))
+        witness.emit(on="finalized").attest(request_id, str(gl.message.contract_address),
+            dossier["question"], dossier["decision_rule"], dossier["source_policy"],
+            _json(dossier["evidence"]), url, claim)
+
+    def _request_verdict(self, dossier, request_id):
+        dossier["pending_id"] = request_id
+        dossier["stage_deadline"] = str(_now() + STAGE_WINDOW)
+        self._save_dossier(dossier)
+        engine = gl.get_contract_at(Address(self.engine_address))
+        engine.emit(on="finalized").resolve(request_id, str(gl.message.contract_address),
+            dossier["question"], dossier["decision_rule"], dossier["position_a"],
+            dossier["position_b"], _json(dossier["evidence"]))
+
+    @gl.public.write.payable
+    def open_dossier(self, title: str, question: str, decision_rule: str, position_a: str,
+                     position_b: str, source_policy: str, baseline_json: str, closes_at: u256) -> str:
+        if not self.configured:
+            raise gl.vm.UserError("[EXPECTED] protocol is not configured")
+        title = _text(title, "title", 96, 4)
+        question = _text(question, "question", 1800, 20)
+        decision_rule = _text(decision_rule, "decision rule", 2600, 30)
+        position_a = _text(position_a, "position A", 90, 2)
+        position_b = _text(position_b, "position B", 90, 2)
+        if position_a.lower() == position_b.lower():
+            raise gl.vm.UserError("[EXPECTED] positions must differ")
+        source_policy = _text(source_policy, "source policy", 1600, 15)
+        try:
+            baseline = json.loads(baseline_json)
+        except Exception:
+            raise gl.vm.UserError("[EXPECTED] baseline must be JSON") from None
+        if not isinstance(baseline, list) or not 1 <= len(baseline) <= MAX_BASELINE:
+            raise gl.vm.UserError("[EXPECTED] baseline must contain 1..4 sources")
+        seeds = []
+        for index, item in enumerate(baseline):
+            url = _text(item.get("url", ""), "baseline URL", 900, 8)
+            claim = _text(item.get("claim", ""), "baseline claim", 1200, 8)
+            if not url.startswith("https://"):
+                raise gl.vm.UserError("[EXPECTED] HTTPS baseline required")
+            seeds.append({"id": f"base-{index + 1}", "url": url, "claim": claim})
+        reward = int(gl.message.value)
+        if not MIN_REWARD <= reward <= MAX_REWARD or not _now() + 3600 <= int(closes_at) <= _now() + 21 * 86400:
+            raise gl.vm.UserError("[EXPECTED] invalid reward or closing time")
+        dossier_id = "noema-" + str(int(self.next_dossier))
+        self.next_dossier = u256(int(self.next_dossier) + 1)
+        dossier = {"id": dossier_id, "title": title, "question": question,
+            "decision_rule": decision_rule, "position_a": position_a, "position_b": position_b,
+            "source_policy": source_policy, "sponsor": str(gl.message.sender_address),
+            "status": "BASELINE_WITNESSING", "reward_atto": str(reward),
+            "bond_atto": str(max(MIN_BOND, reward // 100)), "created_at": _iso(),
+            "closes_at": str(int(closes_at)), "baseline_queue": seeds, "baseline_cursor": 0,
+            "evidence": [], "manifest_root": "", "submission_ids": [], "active_ids": [],
+            "queue": [], "pending_id": "", "stage_deadline": "", "winner": "",
+            "resolution": "", "decisive_ids": [], "closure_basis": "", "closed_at": ""}
+        self._save_dossier(dossier)
+        self.dossier_ids.append(dossier_id)
+        self.deposited = u256(int(self.deposited) + reward)
+        self.reward_escrow = u256(int(self.reward_escrow) + reward)
+        seed = seeds[0]
+        self._request_witness(dossier, f"baseline:{dossier_id}:0", seed["url"], seed["claim"])
+        return dossier_id
+
+    @gl.public.write
+    def record_attestation(self, request_id: str, result_json: str) -> None:
+        if str(gl.message.sender_address).lower() != self.witness_address.lower():
+            raise gl.vm.UserError("[EXPECTED] witness callback only")
+        result = json.loads(result_json)
+        if request_id.startswith("baseline:"):
+            _, dossier_id, cursor_text = request_id.split(":")
+            dossier = self._dossier(dossier_id)
+            if dossier["status"] != "BASELINE_WITNESSING" or dossier["pending_id"] != request_id:
+                raise gl.vm.UserError("[EXPECTED] stale baseline callback")
+            if result.get("status") != "ATTESTED":
+                self._close_refund(dossier, "INVALID_OR_UNAVAILABLE_BASELINE")
+                return
+            cursor = int(cursor_text)
+            seed = dossier["baseline_queue"][cursor]
+            dossier["evidence"].append(self._evidence_record(seed["id"], seed["url"], seed["claim"], result, "BASELINE"))
+            cursor += 1
+            dossier["baseline_cursor"] = cursor
+            dossier["pending_id"] = ""
+            if cursor < len(dossier["baseline_queue"]):
+                seed = dossier["baseline_queue"][cursor]
+                self._request_witness(dossier, f"baseline:{dossier_id}:{cursor}", seed["url"], seed["claim"])
+            else:
+                dossier["status"] = "BASELINE_DECISION"
+                dossier["manifest_root"] = _manifest_root(dossier["evidence"])
+                self._request_verdict(dossier, f"baseline-verdict:{dossier_id}")
+            return
+        submission = self._submission(request_id)
+        dossier = self._dossier(submission["dossier_id"])
+        if submission["status"] != "WITNESS_PENDING" or dossier["pending_id"] != request_id:
+            raise gl.vm.UserError("[EXPECTED] stale attestation callback")
+        submission["attestation"] = result
+        if dossier["status"] != "OPEN" or _now() >= int(dossier["closes_at"]):
+            submission["status"] = "STALE"
+            self._release_bond(submission, submission["researcher"])
+            self._finish_submission(dossier, submission)
+        elif result.get("status") == "UNAVAILABLE":
+            submission["status"] = "RETRYABLE"
+            self._release_bond(submission, submission["researcher"])
+            self._finish_submission(dossier, submission)
+        elif result.get("status") != "ATTESTED":
+            submission["status"] = "REJECTED"
+            self._release_bond(submission, dossier["sponsor"])
+            self._finish_submission(dossier, submission)
+        else:
+            submission["status"] = "VERDICT_PENDING"
+            candidate = self._evidence_record(submission["id"], submission["url"], submission["claim"], result, "RESEARCH")
+            submission["candidate_record"] = candidate
+            dossier["evidence"].append(candidate)
+            dossier["manifest_root"] = _manifest_root(dossier["evidence"])
+            self._save_submission(submission)
+            self._request_verdict(dossier, submission["id"])
+
+    def _evidence_record(self, item_id, url, claim, result, kind):
+        return {"id": item_id, "kind": kind, "requested_url": url,
+            "source_host": result.get("requested_host", url.split("/")[2].lower()),
+            "canonical_url": result.get("canonical_url", ""), "publisher": result.get("publisher", ""),
+            "published_at": result.get("published_at", ""), "claim": claim,
+            "claim_digest": result["claim_digest"], "content_digest": result["content_digest"],
+            "observed_at": result["observed_at"], "http_status": result.get("http_status", 0)}
+
+    @gl.public.write
+    def record_verdict(self, request_id: str, result_json: str) -> None:
+        if str(gl.message.sender_address).lower() != self.engine_address.lower():
+            raise gl.vm.UserError("[EXPECTED] engine callback only")
+        result = json.loads(result_json)
+        if request_id.startswith("baseline-verdict:"):
+            dossier = self._dossier(request_id.split(":", 1)[1])
+            if dossier["status"] != "BASELINE_DECISION" or dossier["pending_id"] != request_id:
+                raise gl.vm.UserError("[EXPECTED] stale baseline verdict")
+            if result.get("manifest_root") != dossier["manifest_root"]:
+                raise gl.vm.UserError("[EXPECTED] baseline manifest root mismatch")
+            dossier["pending_id"] = ""
+            if result.get("outcome") != "UNRESOLVED":
+                self._close_refund(dossier, "BASELINE_ALREADY_RESOLVES")
+            else:
+                dossier["status"] = "OPEN"
+                dossier["baseline_queue"] = []
+                self._save_dossier(dossier)
+            return
+        submission = self._submission(request_id)
+        dossier = self._dossier(submission["dossier_id"])
+        if submission["status"] != "VERDICT_PENDING" or dossier["pending_id"] != request_id:
+            raise gl.vm.UserError("[EXPECTED] stale verdict callback")
+        if result.get("manifest_root") != dossier["manifest_root"]:
+            raise gl.vm.UserError("[EXPECTED] verdict manifest root mismatch")
+        submission["verdict"] = result
+        if result.get("outcome") == "UNRESOLVED":
+            submission["status"] = "ATTESTED_NON_DECISIVE"
+            self._release_bond(submission, submission["researcher"])
+            self._finish_submission(dossier, submission)
+            if len(dossier["evidence"]) >= MAX_EVIDENCE:
+                self._close_refund(dossier, "EVIDENCE_CAP_REACHED")
+        else:
+            reward = int(dossier["reward_atto"])
+            self.reward_escrow = u256(int(self.reward_escrow) - reward)
+            self._credit(submission["researcher"], reward)
+            self._release_bond(submission, submission["researcher"])
+            submission["status"] = "DECISIVE"
+            submission["settled_at"] = _iso()
+            dossier["reward_atto"] = "0"
+            dossier["status"] = "RESOLVED"
+            dossier["winner"] = submission["researcher"]
+            dossier["resolution"] = result["outcome"]
+            dossier["decisive_ids"] = result["decisive_ids"]
+            dossier["closure_basis"] = result["basis"]
+            dossier["closed_at"] = _iso()
+            self._remove_active(dossier, submission["id"])
+            self._save_submission(submission)
+            for sid in list(dossier["active_ids"]):
+                other = self._submission(sid)
+                other["status"] = "PROTOCOL_BLOCKED"
+                other["settled_at"] = _iso()
+                self._release_bond(other, other["researcher"])
+                self._save_submission(other)
+            dossier["active_ids"] = []
+            dossier["queue"] = []
+            dossier["pending_id"] = ""
+            self._save_dossier(dossier)
+
+    def _finish_submission(self, dossier, submission):
+        submission["settled_at"] = _iso()
+        self._remove_active(dossier, submission["id"])
+        self._save_submission(submission)
+        self._save_dossier(dossier)
+        self._start_next(dossier)
+
+    def _start_next(self, dossier):
+        if dossier["status"] != "OPEN" or dossier["pending_id"] or not dossier["queue"]:
+            return
+        sid = dossier["queue"][0]
+        submission = self._submission(sid)
+        if submission["status"] != "QUEUED":
+            dossier["queue"].pop(0)
+            self._save_dossier(dossier)
+            self._start_next(dossier)
+            return
+        submission["status"] = "WITNESS_PENDING"
+        self._save_submission(submission)
+        self._request_witness(dossier, sid, submission["url"], submission["claim"])
+
+    @gl.public.write.payable
+    def seal_disclosure(self, dossier_id: str, commitment: str) -> str:
+        dossier = self._dossier(dossier_id)
+        if dossier["status"] != "OPEN" or _now() + REVEAL_WINDOW >= int(dossier["closes_at"]):
+            raise gl.vm.UserError("[EXPECTED] dossier is not accepting research")
+        if len(dossier["submission_ids"]) >= MAX_LIFETIME_SUBMISSIONS or len(dossier["active_ids"]) >= MAX_ACTIVE:
+            raise gl.vm.UserError("[EXPECTED] bounded submission capacity reached")
+        if len(dossier["evidence"]) >= MAX_EVIDENCE:
+            raise gl.vm.UserError("[EXPECTED] bounded evidence capacity reached")
+        if re.fullmatch(r"[0-9a-f]{64}", commitment) is None or commitment in self.commitments:
+            raise gl.vm.UserError("[EXPECTED] invalid or duplicate commitment")
+        researcher = str(gl.message.sender_address)
+        if researcher.lower() == dossier["sponsor"].lower() or int(gl.message.value) != int(dossier["bond_atto"]):
+            raise gl.vm.UserError("[EXPECTED] ineligible researcher or incorrect bond")
+        sid = "note-" + str(int(self.next_submission))
+        self.next_submission = u256(int(self.next_submission) + 1)
+        submission = {"id": sid, "dossier_id": dossier_id, "researcher": researcher,
+            "commitment": commitment, "status": "COMMITTED", "bond_atto": dossier["bond_atto"],
+            "bond_released": False, "created_at": _iso(),
+            "reveal_deadline": str(_now() + REVEAL_WINDOW), "url": "", "claim": ""}
+        self._save_submission(submission)
+        self.commitments[commitment] = sid
+        dossier["submission_ids"].append(sid)
+        dossier["active_ids"].append(sid)
+        self._save_dossier(dossier)
+        bond = int(gl.message.value)
+        self.deposited = u256(int(self.deposited) + bond)
+        self.bond_escrow = u256(int(self.bond_escrow) + bond)
+        return sid
+
+    @gl.public.write
+    def disclose(self, submission_id: str, url: str, claim: str, salt: str) -> None:
+        submission = self._submission(submission_id)
+        dossier = self._dossier(submission["dossier_id"])
+        if submission["status"] != "COMMITTED" or str(gl.message.sender_address).lower() != submission["researcher"].lower():
+            raise gl.vm.UserError("[EXPECTED] disclosure is not available")
+        if _now() >= int(submission["reveal_deadline"]):
+            raise gl.vm.UserError("[EXPECTED] disclosure window elapsed")
+        url = _text(url, "source URL", 900, 8)
+        claim = _text(claim, "claim", 1200, 8)
+        salt = _text(salt, "salt", 160, 16)
+        if not url.startswith("https://") or _commitment(str(gl.message.contract_address), dossier["id"],
+                submission["researcher"], url, claim, salt) != submission["commitment"]:
+            raise gl.vm.UserError("[EXPECTED] disclosure does not match its seal")
+        reservation = _sha(_json({"dossier": dossier["id"], "url": url, "claim": claim}))
+        if reservation in self.reservations and self.reservations[reservation]:
+            raise gl.vm.UserError("[EXPECTED] evidence packet already reserved")
+        self.reservations[reservation] = submission_id
+        submission.update({"url": url, "claim": claim, "claim_digest": _sha(claim),
+                           "status": "QUEUED", "revealed_at": _iso(), "reservation": reservation})
+        dossier["queue"].append(submission_id)
+        self._save_submission(submission)
+        self._save_dossier(dossier)
+        self._start_next(dossier)
+
+    @gl.public.write
+    def expire_disclosure(self, submission_id: str) -> None:
+        submission = self._submission(submission_id)
+        dossier = self._dossier(submission["dossier_id"])
+        if submission["status"] != "COMMITTED" or _now() < int(submission["reveal_deadline"]):
+            raise gl.vm.UserError("[EXPECTED] disclosure is not expirable")
+        submission["status"] = "UNREVEALED"
+        self._release_bond(submission, dossier["sponsor"])
+        self._finish_submission(dossier, submission)
+
+    @gl.public.write
+    def expire_stage(self, dossier_id: str) -> None:
+        dossier = self._dossier(dossier_id)
+        pending_id = dossier.get("pending_id", "")
+        deadline = int(dossier.get("stage_deadline", "0") or 0)
+        if not pending_id or deadline == 0 or _now() < deadline:
+            raise gl.vm.UserError("[EXPECTED] semantic stage is not expired")
+        if pending_id.startswith("baseline:") or pending_id.startswith("baseline-verdict:"):
+            self._close_refund(dossier, "BASELINE_STAGE_TIMEOUT")
+            return
+        submission = self._submission(pending_id)
+        if submission["status"] not in ("WITNESS_PENDING", "VERDICT_PENDING"):
+            raise gl.vm.UserError("[EXPECTED] pending submission stage not found")
+        if submission["status"] == "VERDICT_PENDING":
+            # Judgment receives a tentatively appended candidate. Roll it back
+            # before continuing so an inconclusive stage never changes history.
+            dossier["evidence"] = [item for item in dossier["evidence"] if item["id"] != submission["id"]]
+            dossier["manifest_root"] = _manifest_root(dossier["evidence"])
+        submission["status"] = "INCONCLUSIVE_TIMEOUT"
+        self._release_bond(submission, submission["researcher"])
+        self._finish_submission(dossier, submission)
+
+    @gl.public.write
+    def expire_dossier(self, dossier_id: str) -> None:
+        dossier = self._dossier(dossier_id)
+        if dossier["status"] not in ("OPEN", "BASELINE_WITNESSING", "BASELINE_DECISION") or _now() < int(dossier["closes_at"]):
+            raise gl.vm.UserError("[EXPECTED] dossier is not expired")
+        self._close_refund(dossier, "DEADLINE_ELAPSED")
+
+    @gl.public.write
+    def withdraw(self) -> None:
+        account = gl.message.sender_address
+        if account not in self.credits or int(self.credits[account]) == 0:
+            raise gl.vm.UserError("[EXPECTED] no credit available")
+        amount = int(self.credits[account])
+        self.credits[account] = u256(0)
+        self.claimable = u256(int(self.claimable) - amount)
+        self.withdrawn = u256(int(self.withdrawn) + amount)
+        gl.transfer(account, u256(amount))
+
+    @gl.public.view
+    def get_dossier(self, dossier_id: str) -> dict:
+        return self._dossier(dossier_id)
+
+    @gl.public.view
+    def get_submission(self, submission_id: str) -> dict:
+        return self._submission(submission_id)
+
+    @gl.public.view
+    def get_submission_for_commitment(self, commitment: str) -> str:
+        return self.commitments[commitment] if commitment in self.commitments else ""
+
+    @gl.public.view
+    def find_latest_dossier_by_sponsor(self, sponsor: str) -> str:
+        target = _address(sponsor, "sponsor").lower()
+        for index in range(len(self.dossier_ids) - 1, -1, -1):
+            dossier = self._dossier(self.dossier_ids[index])
+            if dossier["sponsor"].lower() == target:
+                return dossier["id"]
+        return ""
+
+    @gl.public.view
+    def list_submissions(self, dossier_id: str) -> list:
+        dossier = self._dossier(dossier_id)
+        return [self._submission(item) for item in dossier["submission_ids"]]
+
+    @gl.public.view
+    def list_dossiers(self, offset: u256, limit: u256) -> list:
+        start = min(int(offset), len(self.dossier_ids))
+        size = min(max(int(limit), 1), MAX_PAGE)
+        return [self._dossier(self.dossier_ids[i]) for i in range(start, min(start + size, len(self.dossier_ids)))]
+
+    @gl.public.view
+    def get_credit(self, account: str) -> str:
+        address = Address(_address(account, "account"))
+        return str(int(self.credits[address]) if address in self.credits else 0)
+
+    @gl.public.view
+    def get_stats(self) -> dict:
+        return {"product": "Noema", "version": VERSION, "chain_id": CHAIN_ID,
+            "dossiers": str(len(self.dossier_ids)), "max_evidence_per_dossier": str(MAX_EVIDENCE),
+            "max_lifetime_submissions": str(MAX_LIFETIME_SUBMISSIONS),
+            "accounting_ok": int(self.deposited) == int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable) + int(self.withdrawn)}

@@ -1,0 +1,23 @@
+{
+  "product": "Noema",
+  "network": "studionet",
+  "chainId": 61999,
+  "rpc": "https://studio.genlayer.com/api",
+  "explorer": "https://explorer-studio.genlayer.com",
+  "deployedAt": "2026-10-16T01:37:00.017Z",
+  "contracts": {
+    "hub": {
+      "address": "0xe4C8fCeD5Ba04019A4816D7F51Daa3EAacc26E40",
+      "txHash": "0x8e849533d50b3fa387280f09e884593f1ef9f9a354f21482c4b60536bdaa5046"
+    },
+    "witness": {
+      "address": "0x2988f0021A834385c9Cf33B7687C8b97B59D3Ea0",
+      "txHash": "0x5255394e8c301896ae497892be9ed2c5d54cc76d3ada56f15d120b4039bf9b0d"
+    },
+    "engine": {
+      "address": "0x6C3BD278F19AAcbd91b776D7DF8883C01f738d96",
+      "txHash": "0x72607c2d668d5ad61326376ae67ea8abd1b53822a30a4ed830b195c3f8962d65"
+    },
+    "configureTxHash": "0xebcc0275b54ad4a95d19a9c9cfd539640a21ae1c4fa0e668871bc26aa2ccb14c"
+  }
+}

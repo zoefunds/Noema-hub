@@ -1,0 +1,16 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { connectWallet, formatGen, getCredit, loadPending, removePending, submitHubWrite, waitForFinalization } from "@/lib/liveProtocol";
+import type { PendingDisclosure } from "@/lib/types";
+
+export function VaultLive() {
+  const [items,setItems]=useState<PendingDisclosure[]>([]); const [address,setAddress]=useState(""); const [credit,setCredit]=useState("0"); const [notice,setNotice]=useState("");
+  useEffect(()=>setItems(loadPending()),[]);
+  async function open(){try{const account=await connectWallet();setAddress(account);setCredit(await getCredit(account,true));}catch(error){setNotice(error instanceof Error?error.message:"Wallet failed");}}
+  async function reveal(item:PendingDisclosure){try{if(!item.submissionId)throw new Error("The finalized submission ID is not recorded yet.");const account=address||await connectWallet();setNotice(`Revealing ${item.submissionId}…`);const hash=await submitHubWrite(account,"disclose",[item.submissionId,item.url,item.claim,item.salt]);await waitForFinalization(hash);removePending(item.commitment);setItems(loadPending());setNotice(`${item.submissionId} is finalized and queued for source witnessing.`);}catch(error){setNotice(error instanceof Error?error.message:"Reveal failed");}}
+  async function withdraw(){try{const account=address||await connectWallet();setNotice("Confirm credit withdrawal…");const hash=await submitHubWrite(account,"withdraw");await waitForFinalization(hash);setCredit(await getCredit(account,true));setNotice("Credit withdrawn after finality.");}catch(error){setNotice(error instanceof Error?error.message:"Withdrawal failed");}}
+  return <><div className="vault-balance"><div><span>Connected researcher</span><strong>{address||"Not connected"}</strong></div><div><span>Claimable Hub credit</span><strong>{formatGen(credit)} GEN</strong></div><button className="button primary" onClick={address?withdraw:open}>{address?"Withdraw credit":"Open field wallet"}</button></div>
+    {notice&&<div className="form-note" role="status">{notice}</div>}
+    <div className="pending-list">{items.length?items.map((item)=><article className="pending-note" key={item.commitment}><div className="eyebrow">{item.submissionId||"Seal pending"} · {item.dossierId}</div><h2>{item.claim}</h2><p>{item.url}</p><p className="manifest">commitment / {item.commitment}<br/>created / {item.createdAt}</p><button className="button primary" disabled={!item.submissionId} onClick={()=>reveal(item)}>Reveal disclosure</button></article>):<div className="vault-empty"><div><div className="eyebrow">Reveal queue clear</div><h2>No sealed research is waiting in this browser.</h2><p>When you seal a disclosure, its salt and claim stay here until the reveal finalizes.</p></div></div>}</div></>;
+}
