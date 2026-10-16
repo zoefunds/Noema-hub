@@ -135,6 +135,13 @@ def test_payout_reconciliation_requires_exact_parent_child_receipt_linkage():
     assert check({**parent, "data": {"calldata": "other-call"}}, child, *args) == "INVALID"
     assert check(parent, {**child, "status": "ACCEPTED"}, *args) == "PENDING"
     assert check(parent, child, "0x" + "4" * 64, child_id, hub, recipient, 3, args[-1]) == "INVALID"
+    # The actual public StudioNet eth_getTransactionByHash response calls its
+    # transaction identifier `hash`, rather than `tx_id`.
+    rpc_parent = {**parent, "hash": parent_id}
+    rpc_child = {**child, "hash": child_id}
+    del rpc_parent["tx_id"]
+    del rpc_child["tx_id"]
+    assert check(rpc_parent, rpc_child, *args) == "DELIVERED"
 
 
 def test_failed_payout_restoration_accounts_for_actual_backing_loss_only():

@@ -73,7 +73,9 @@ def _manifest_root(items):
 
 
 def _tx_id(transaction):
-    return str(transaction.get("tx_id", transaction.get("id", ""))).lower()
+    # StudioNet's public eth_getTransactionByHash JSON-RPC shape uses `hash`,
+    # whereas GenLayerJS transaction records often expose `tx_id`.
+    return str(transaction.get("tx_id", transaction.get("hash", transaction.get("id", "")))).lower()
 
 
 def _tx_value(value):
