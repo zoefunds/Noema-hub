@@ -34,7 +34,9 @@ export default async function main(client: GenLayerClient<any>) {
     return JSON.parse(readFileSync(manifestPath, "utf8"));
   }
 
-  const hub = await deploy(client, "contracts/noema_hub.py", ["", ""]);
+  // StudioNet currently rejects contract-originated value messages to EOAs.
+  // Preserve credits and reject withdrawal at contract level on this release.
+  const hub = await deploy(client, "contracts/noema_hub.py", ["", "", false]);
   const witness = await deploy(client, "contracts/source_witness.py", [hub.address]);
   const engine = await deploy(client, "contracts/verdict_engine.py", [hub.address]);
   const configureHash = await (client as any).writeContract({ address: hub.address,

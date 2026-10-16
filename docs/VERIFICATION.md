@@ -35,6 +35,8 @@ manifest root: 9f18409690f81c54c257d64c0e15572e7c77674afa5c7707de57e4411c87f000
 
 ## StudioNet resolution proof
 
+The current production safety deployment is Hub `0x8AF8731fC1143010dD9b21e8B357A0Ca9D1644b6`, Witness `0x366815EC7f963786E8A0d6Ec7c10bb38aE989D0b`, and Engine `0x3baDCAf04b067B212Cd51fBf8FA95ef8DC209796`. Its sponsor phase reached `noema-3`; repeated researcher calls encountered a StudioNet receipt with `FINALIZED` but no execution-result field at `seal_disclosure`, so this new deployment is not represented as a completed resolution until that receipt is independently replayed. The earlier completed resolution remains preserved in Git history and the prior acceptance artifact.
+
 The complete machine-readable record is in `deployments/e2e-studionet.json`. The final hardened deployment resolved a real public question using first-party files from the official `openai/codex` repository:
 
 - dossier `noema-1`;
@@ -62,6 +64,6 @@ A real withdrawal attempt was executed rather than simulated:
 - `value_credited=false`;
 - recipient balance before and after: `10029599999999999997` atto GEN.
 
-This demonstrates that the current StudioNet backend does not deliver this contract-originated value message to an ordinary wallet, even though the pinned GenVM SDK exposes `emit_transfer`. Noema therefore disables withdrawal in production by default. The UI will enable it only when `NEXT_PUBLIC_NATIVE_PAYOUTS_ENABLED=true` is deliberately set after a network-level transfer test passes.
+This demonstrates that the current StudioNet backend does not deliver this contract-originated value message to an ordinary wallet, even though the pinned GenVM SDK exposes `emit_transfer`. Noema therefore disables withdrawal in production by default at both the Hub and UI layers. A future deployment may enable it only after network-level wallet-delivery and failed-callback tests pass.
 
 The Hub includes a failed-message recovery hook, but this StudioNet execution did not schedule that callback. This is retained as an explicit network blocker, not reported as a successful payout.

@@ -38,7 +38,7 @@ async function write(client: GenLayerClient<any>, hub: `0x${string}`, functionNa
   const nestedSuccess = String(leader?.execution_result ?? "").toUpperCase() === "SUCCESS"
     && String(leader?.result?.status ?? "").toLowerCase() === "return";
   if (status !== "FINALIZED" || !(["FINISHED_WITH_RETURN", "FINISHEDWITHRETURN"].includes(execution) || nestedSuccess)) {
-    throw new Error(`${functionName} failed: ${status || "UNKNOWN"} / ${execution || "UNKNOWN"}`);
+    throw new Error(`${functionName} failed: ${status || "UNKNOWN"} / ${execution || "UNKNOWN"} / ${JSON.stringify(receipt)}`);
   }
   return String(hash);
 }

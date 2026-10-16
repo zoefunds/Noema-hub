@@ -70,6 +70,7 @@ class NoemaHub(gl.Contract):
     reservations: TreeMap[str, str]
     credits: TreeMap[Address, u256]
     pending_outbound: TreeMap[Address, u256]
+    native_payouts_enabled: bool
     witness_address: str
     engine_address: str
     bootstrapper: str
@@ -82,11 +83,12 @@ class NoemaHub(gl.Contract):
     claimable: u256
     withdrawn: u256
 
-    def __init__(self, witness_address: str, engine_address: str):
+    def __init__(self, witness_address: str, engine_address: str, native_payouts_enabled: bool):
         self.bootstrapper = str(gl.message.sender_address)
         self.configured = bool(witness_address and engine_address)
         self.witness_address = _address(witness_address, "witness") if witness_address else ""
         self.engine_address = _address(engine_address, "engine") if engine_address else ""
+        self.native_payouts_enabled = native_payouts_enabled
         self.next_dossier = u256(1)
         self.next_submission = u256(1)
         self.deposited = u256(0)
@@ -481,6 +483,8 @@ class NoemaHub(gl.Contract):
 
     @gl.public.write
     def withdraw(self) -> None:
+        if not self.native_payouts_enabled:
+            raise gl.vm.UserError("[EXPECTED] native payouts are unavailable on this deployment")
         account = gl.message.sender_address
         if account not in self.credits or int(self.credits[account]) == 0:
             raise gl.vm.UserError("[EXPECTED] no credit available")
@@ -489,9 +493,8 @@ class NoemaHub(gl.Contract):
         self.claimable = u256(int(self.claimable) - amount)
         self.withdrawn = u256(int(self.withdrawn) + amount)
         self.pending_outbound[account] = u256(amount)
-        # Native GEN leaves the contract through GenVM's message-based transfer.
-        # Effects are committed before interaction, so a failed emission reverts
-        # the complete call and cannot consume or duplicate the credit.
+        # Enable this path only on networks where wallet delivery and the
+        # failed-message callback have both been proven end to end.
         gl.get_contract_at(account).emit_transfer(value=u256(amount))
 
     @gl.public.write.payable
@@ -548,4 +551,5 @@ class NoemaHub(gl.Contract):
             "dossiers": str(len(self.dossier_ids)), "max_evidence_per_dossier": str(MAX_EVIDENCE),
             "max_lifetime_submissions": str(MAX_LIFETIME_SUBMISSIONS),
             "max_decisive_ids": str(MAX_DECISIVE_IDS),
+            "native_payouts_enabled": self.native_payouts_enabled,
             "accounting_ok": int(self.deposited) == int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable) + int(self.withdrawn)}

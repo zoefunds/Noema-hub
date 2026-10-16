@@ -61,6 +61,8 @@ def test_executable_settlement_requires_candidate_and_bounded_decisive_set():
 
 def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
     hub = HUB.read_text()
+    assert "if not self.native_payouts_enabled" in hub
+    assert "native payouts are unavailable on this deployment" in hub
     zero = hub.index("self.credits[account] = u256(0)")
     transfer = hub.index("emit_transfer(value=u256(amount))")
     assert zero < transfer

@@ -130,13 +130,15 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 
 ## Verified Studionet release
 
-- Hub: `0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3`
-- SourceWitness: `0x8B86CA98cc0bfaCf7995578DAB10F956C275c82c`
-- VerdictEngine: `0xC886a61cc0402Db8b71ec0405a658D0e32b2120D`
+- Hub: `0x8AF8731fC1143010dD9b21e8B357A0Ca9D1644b6`
+- SourceWitness: `0x366815EC7f963786E8A0d6Ec7c10bb38aE989D0b`
+- VerdictEngine: `0x3baDCAf04b067B212Cd51fBf8FA95ef8DC209796`
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
 
 StudioNet currently rejects emitted native transfers to ordinary wallet addresses as `Contract <EOA> not found`. The finalized failed child transaction and unchanged wallet balance are preserved in the acceptance artifact. The production UI keeps native withdrawal paused until this runtime behavior is corrected; crediting and settlement remain fully auditable, but wallet payout is not represented as successful.
+
+The current deployment also enforces this pause inside `NoemaHub`, so a direct contract call cannot consume credit while StudioNet delivery is unavailable.
 
 The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The complete public-network run is preserved in `deployments/e2e-studionet.json`.

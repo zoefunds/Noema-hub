@@ -42,11 +42,11 @@ The currently verified Studionet deployment is:
 
 | Component | Address | Deployment transaction |
 |---|---|---|
-| NoemaHub | `0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3` | `0x0efb2045c491d1eef4742d2a5de96402130262fbfbc0134215da8f5139008cd0` |
-| SourceWitness | `0x8B86CA98cc0bfaCf7995578DAB10F956C275c82c` | `0x555c97ff32d0b538f3d6aa178a28f1cc50c17c871aa2ac2e9bfa4548b1407965` |
-| VerdictEngine | `0xC886a61cc0402Db8b71ec0405a658D0e32b2120D` | `0x58c4ffa340039378e8e1c3f9d410362f335daeb434e8912000b89bfcb7e95658` |
+| NoemaHub | `0x8AF8731fC1143010dD9b21e8B357A0Ca9D1644b6` | `0x4f85531f0d2f72390e475f3e9b3ed166578fd72315c74a38271959025ab511c2` |
+| SourceWitness | `0x366815EC7f963786E8A0d6Ec7c10bb38aE989D0b` | `0x6d8a2f5af69b505ed32a7122db18e5541f52e2e918657d3acf37a3150616e4fd` |
+| VerdictEngine | `0x3baDCAf04b067B212Cd51fBf8FA95ef8DC209796` | `0xa594579e628974bc7e0fc8a48830a8416cd45803af882264ce2078a7faacc86c` |
 
-The one-time binding transaction is `0xc6ba6e1c57cfd2d496a0f6e9cec181d6b365643fc2a4bca3123efcfe604cb98e`.
+The one-time binding transaction is `0x824eba1f16717e10b2037c6e91b4ca66e6b82ff0ea3338a7aefd2473bdc93f74`. This release has native payouts disabled at the Hub until StudioNet proves EOA transfer delivery.
 
 ## Real-network acceptance test
 
