@@ -3,20 +3,20 @@ import { FieldLive } from "@/components/FieldLive";
 
 export default function Home() {
   return <>
-    <section className="hero grid-paper">
+    <section className="hero">
       <div className="hero-copy">
-        <div className="kicker">A public research settlement protocol</div>
-        <h1>Fund the fact<br /><em>that changes the record.</em></h1>
+        <div className="kicker">Evidence network online</div>
+        <h1>Turn public proof into <em>settled truth.</em></h1>
         <p className="lede">Noema turns unresolved public questions into bounded research dossiers. Sources are fetched by independent validators. The first disclosure that makes the rule decidable earns the reward.</p>
         <div className="hero-actions"><Link className="button primary" href="/field/new">Open a dossier</Link><Link className="button text" href="/field">Enter the field <span>→</span></Link></div>
       </div>
-      <div className="hero-instrument" aria-label="Protocol stages">
+      <div className="hero-instrument" aria-label="Live protocol console">
         <div className="orbit o1" /><div className="orbit o2" />
-        <div className="instrument-center"><span>network state</span><strong>LIVE</strong><small>Studionet · 61999</small></div>
+        <div className="instrument-center"><span>Noema signal console</span><strong>ONLINE</strong><small>Studionet / chain 61999</small></div>
         {[["01", "Frame"], ["02", "Witness"], ["03", "Resolve"]].map(([n, label], i) =>
           <div className={`instrument-node n${i + 1}`} key={n}><b>{n}</b><span>{label}</span></div>)}
       </div>
-      <div className="hero-rail"><span>CONSENSUS FIELD / 61999</span><i /><span>SCROLL TO OBSERVE</span></div>
+      <div className="hero-rail"><span>INDEPENDENT WITNESSES / 61999</span><i /><span>LIVE PUBLIC RECORD</span></div>
     </section>
 
     <section className="dispatch">
@@ -38,7 +38,7 @@ export default function Home() {
       <div><span>18</span><p>attested records maximum per dossier</p></div>
       <div><span>72</span><p>lifetime disclosures maximum per dossier</p></div>
       <div><span>0</span><p>admin overrides or mutable adjudicators</p></div>
-      <blockquote>“A conclusion is only as durable as the trail that produced it.”</blockquote>
+      <blockquote>Every conclusion ships with the trail that produced it.</blockquote>
     </section>
   </>;
 }
