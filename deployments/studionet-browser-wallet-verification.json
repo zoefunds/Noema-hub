@@ -2,7 +2,7 @@
   "network": "StudioNet",
   "chainId": 61999,
   "verificationDate": "2026-10-16",
-  "verificationScope": "Browser-wallet dossier creation and baseline witness/decision lifecycle",
+  "verificationScope": "Browser-wallet dossier creation, baseline witness/decision lifecycle, commitment sealing, and a reverted disclosure attempt",
   "browserWalletInitiated": true,
   "walletAddress": "0x6f0b4cE7a1872db132b2F6B7743deFb30eBa698a",
   "contracts": {
@@ -116,17 +116,62 @@
       "createdAtLocal": "2026-10-16 13:35:56 Africa/Lagos",
       "parent": "0x7248c692c84b6b11c4327c52f57408f416654455f32fa33c295e4bd9a7e6d7b0",
       "explorer": "https://explorer-studio.genlayer.com/tx/0x2e4cc59d821e1bca5ecc779ee7bc1d38b4104847dcc3629c5bbc8acfda72c925"
+    },
+    {
+      "role": "Browser wallet seals researcher disclosure commitment",
+      "hash": "0x3cb1d9439c4228544ee9bf87cbba1c110d67b46d452b41b74a0d5f5bc825f0c1",
+      "method": "seal_disclosure",
+      "from": "0x7401c129EDfc26E68FE19309fE461eb3Db1058Eb",
+      "to": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "valueGen": "0.10",
+      "parameters": ["noema-2", "5ce1cae0080976d21de5857dbff2d75f2225f112f26cde911785b1c0a2a4464d"],
+      "result": "note-2",
+      "status": "FINALIZED",
+      "genvmExecution": "SUCCESS",
+      "createdAtLocal": "2026-10-16 13:41:44 Africa/Lagos",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0x3cb1d9439c4228544ee9bf87cbba1c110d67b46d452b41b74a0d5f5bc825f0c1"
+    },
+    {
+      "role": "Browser wallet disclosure attempt rejected because reveal did not match commitment",
+      "hash": "0x58376e9a4afe506a46bee8f75d25135bfb4e45843907abe8f938a73faddf4433",
+      "method": "disclose",
+      "from": "0x7401c129EDfc26E68FE19309fE461eb3Db1058Eb",
+      "to": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
+      "valueGen": "0",
+      "parameters": [
+        "note-2",
+        "https://raw.githubusercontent.com/openai/codex/main/LICENSE",
+        "The official LICENSE file on the openai/codex main branch explicitly declares Apache License Version 2.0, January 2004, and contains its terms and conditions for use, reproduction, and distribution.",
+        "e16b6c772e85c8e321beecfe875be9423bba9f2915a8ad36d61856daba2185cc"
+      ],
+      "status": "FINALIZED",
+      "genvmExecution": "ERROR",
+      "error": "[EXPECTED] disclosure does not match its seal",
+      "stateEffect": "Transaction rolled back; no disclosure was recorded, no witness request was created, and no reward was attributed.",
+      "createdAtLocal": "2026-10-16 13:42:51 Africa/Lagos",
+      "explorer": "https://explorer-studio.genlayer.com/tx/0x58376e9a4afe506a46bee8f75d25135bfb4e45843907abe8f938a73faddf4433"
     }
   ],
+  "stateAfterLatestTransactions": {
+    "status": "OPEN",
+    "decision": "UNRESOLVED",
+    "evidenceCount": 1,
+    "lifetimeDisclosures": 0,
+    "activeDisclosures": 0,
+    "rewardGen": "10",
+    "researcherBondGen": "0.1",
+    "readback": "Production dossier page /field/noema-2, checked after the reverted disclosure attempt"
+  },
   "limitations": {
-    "scope": "This verifies browser-wallet dossier funding/creation and the full baseline witness-to-unresolved-verdict path.",
+    "scope": "This verifies browser-wallet dossier funding/creation, the baseline witness-to-unresolved-verdict path, and successful commitment sealing. A subsequent disclosure transaction reverted because its reveal did not match the sealed commitment.",
     "notProven": [
-      "researcher commitment and disclosure from the browser wallet",
+      "successful researcher disclosure and independent source witness for note-2",
+      "a candidate-dependent resolved verdict and reward attribution for note-2",
       "research reward attribution in this dossier",
       "browser-originated withdrawal parent and finalized child payout",
       "before-and-after recipient wallet balance for this browser run",
       "duplicate withdrawal rejection for this browser-run dossier"
     ],
-    "note": "The separate CLI/GenLayerJS payout proof is recorded in deployments/studionet-e2e-latest.json. Do not treat this dossier-creation run as browser-originated payout evidence."
+    "note": "The submitted disclose transaction used a reveal tuple that failed the Hub's commitment check and atomically rolled back. No follow-on payout can be attributed to this attempt. The separate CLI/GenLayerJS payout proof is recorded in deployments/studionet-e2e-latest.json. Do not treat this browser-wallet run as a successful disclosure or payout demonstration."
   }
 }
