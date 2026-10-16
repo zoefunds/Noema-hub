@@ -109,7 +109,7 @@ def test_external_payout_failure_is_explicitly_not_claimed_as_recoverable():
 
 def test_payout_reconciliation_requires_exact_parent_child_receipt_linkage():
     tree = ast.parse(HUB.read_text())
-    names = {"_tx_id", "_tx_value", "_tx_address", "_tx_timestamp", "_realized_payout_loss", "_payout_receipt_outcome"}
+    names = {"_tx_id", "_tx_status", "_tx_value", "_tx_address", "_tx_timestamp", "_realized_payout_loss", "_payout_receipt_outcome"}
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
     namespace = {"WITHDRAW_CALLDATA": "DgZtZXRob2REd2l0aGRyYXc=", "datetime": datetime, "timezone": timezone}
     exec(compile(ast.Module(body=functions, type_ignores=[]), "payout_receipt_helpers", "exec"), namespace)
@@ -142,6 +142,10 @@ def test_payout_reconciliation_requires_exact_parent_child_receipt_linkage():
     del rpc_parent["tx_id"]
     del rpc_child["tx_id"]
     assert check(rpc_parent, rpc_child, *args) == "DELIVERED"
+    numeric_parent = {**rpc_parent, "status": 7}
+    numeric_child = {**rpc_child, "status": 7}
+    assert check(numeric_parent, numeric_child, *args) == "DELIVERED"
+    assert check({**numeric_parent, "status": 5}, numeric_child, *args) == "PENDING"
 
 
 def test_failed_payout_restoration_accounts_for_actual_backing_loss_only():

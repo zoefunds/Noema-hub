@@ -78,6 +78,13 @@ def _tx_id(transaction):
     return str(transaction.get("tx_id", transaction.get("hash", transaction.get("id", "")))).lower()
 
 
+def _tx_status(transaction):
+    # The live StudioNet JSON-RPC receipt uses the numeric enum status, while
+    # GenLayerJS normalizes the same value to its status name.
+    value = transaction.get("status_name", transaction.get("status", ""))
+    return "FINALIZED" if str(value).upper() in ("FINALIZED", "7") else str(value).upper()
+
+
 def _tx_value(value):
     try:
         return int(value, 0) if isinstance(value, str) else int(value)
@@ -114,7 +121,7 @@ def _payout_receipt_outcome(parent, child, parent_id, child_id, hub, recipient, 
         return "INVALID"
     if _tx_id(parent) != parent_id.lower() or _tx_id(child) != child_id.lower():
         return "INVALID"
-    if str(parent.get("status", "")).upper() != "FINALIZED" or str(child.get("status", "")).upper() != "FINALIZED":
+    if _tx_status(parent) != "FINALIZED" or _tx_status(child) != "FINALIZED":
         return "PENDING"
     if _tx_address(parent.get("from_address", parent.get("sender", ""))) != recipient.lower():
         return "INVALID"
