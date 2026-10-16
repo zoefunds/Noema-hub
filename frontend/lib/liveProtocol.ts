@@ -13,10 +13,12 @@ export const EXPLORER_URL = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER || "https:
 export const HUB_ADDRESS = process.env.NEXT_PUBLIC_NOEMA_HUB_ADDRESS || "";
 export const NATIVE_PAYOUTS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_PAYOUTS_ENABLED === "true";
 const storageKey = "noema:pending-disclosures:v1";
+const payoutStorageKey = "noema:pending-payouts:v1";
 const rpcTimes: number[] = [];
 const readCache = new Map<string, { expires: number; value: unknown }>();
 
 export type Eip1193Provider = { request: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown> };
+export type PendingPayout = { account: string; parentHash: string; amount: string; walletBefore: string; createdAt: string };
 
 function provider(): Eip1193Provider | null { return typeof window === "undefined" ? null : (window as any).ethereum || null; }
 function assertHub(): `0x${string}` {
@@ -155,3 +157,20 @@ export function loadPending(): PendingDisclosure[] { if (typeof window === "unde
 export function savePending(item: PendingDisclosure): void { const prior = loadPending().filter((x) => x.commitment !== item.commitment); localStorage.setItem(storageKey, JSON.stringify([item, ...prior].slice(0, 24))); }
 export function updatePending(commitment: string, updates: Partial<PendingDisclosure>): void { localStorage.setItem(storageKey, JSON.stringify(loadPending().map((x) => x.commitment === commitment ? { ...x, ...updates } : x))); }
 export function removePending(commitment: string): void { localStorage.setItem(storageKey, JSON.stringify(loadPending().filter((x) => x.commitment !== commitment))); }
+export function loadPendingPayout(account?: string): PendingPayout | null {
+  if (typeof window === "undefined") return null;
+  try { const records: PendingPayout[] = JSON.parse(localStorage.getItem(payoutStorageKey) ?? "[]");
+    return records.find((item) => !account || item.account.toLowerCase() === account.toLowerCase()) ?? null;
+  } catch { return null; }
+}
+export function savePendingPayout(item: PendingPayout): void {
+  const records: PendingPayout[] = typeof window === "undefined" ? [] : JSON.parse(localStorage.getItem(payoutStorageKey) ?? "[]");
+  const next = records.filter((prior) => prior.account.toLowerCase() !== item.account.toLowerCase());
+  localStorage.setItem(payoutStorageKey, JSON.stringify([item, ...next].slice(0, 24)));
+}
+export function removePendingPayout(account: string): void {
+  if (typeof window === "undefined") return;
+  try { const records: PendingPayout[] = JSON.parse(localStorage.getItem(payoutStorageKey) ?? "[]");
+    localStorage.setItem(payoutStorageKey, JSON.stringify(records.filter((item) => item.account.toLowerCase() !== account.toLowerCase())));
+  } catch { localStorage.removeItem(payoutStorageKey); }
+}
