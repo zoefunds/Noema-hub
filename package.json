@@ -7,7 +7,7 @@
     "test:sponsor-key": "node --import tsx --test deploy/sponsorKey.test.ts",
     "typecheck": "npm --prefix frontend run typecheck",
     "build": "npm --prefix frontend run build",
-    "e2e:studionet": "node run-studionet-e2e.mjs"
+    "e2e:studionet": "node --import tsx run-studionet-e2e.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",

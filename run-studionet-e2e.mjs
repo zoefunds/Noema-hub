@@ -20,6 +20,31 @@ const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: 
 if (revision.error) throw revision.error;
 if (revision.status !== 0 || !revision.stdout.trim()) throw new Error("Unable to resolve the exact source commit for the deployment manifest");
 
+const ephemeralKey = process.env.NOEMA_E2E_DEPLOYER_PRIVATE_KEY;
+delete process.env.NOEMA_E2E_DEPLOYER_PRIVATE_KEY;
+if (ephemeralKey) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(ephemeralKey)) throw new Error("The ephemeral deployer key must be a 32-byte 0x-prefixed value");
+  const [{ createAccount, createClient }, { studionet }] = await Promise.all([
+    import("genlayer-js"), import("genlayer-js/chains"),
+  ]);
+  const account = createAccount(ephemeralKey);
+  const client = createClient({ chain: studionet, endpoint: "https://studio.genlayer.com/api", account });
+  const balance = await client.getBalance({ address: account.address });
+  if (balance < 5_000_000_000_000_000n) {
+    throw new Error(`Ephemeral signer ${account.address} has insufficient GEN for deployment and the funded E2E (balance ${balance} atto).`);
+  }
+  delete process.env.NOEMA_SOURCE_COMMIT;
+  process.env.NOEMA_SOURCE_COMMIT = revision.stdout.trim();
+  console.log(`Running with ephemeral StudioNet signer ${account.address}; private key remains process-memory only.`);
+  const { default: deploy } = await import("./deploy/deployNoema.ts");
+  await deploy(client);
+  process.env.NOEMA_E2E_FRESH = "1";
+  const { default: freshE2E } = await import("./deploy/e2eFreshHub.ts");
+  const result = await freshE2E(client);
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+}
+
 const result = spawnSync("genlayer", ["deploy"], {
   cwd: root,
   env: { ...process.env, NOEMA_E2E_FRESH: "1", NOEMA_SOURCE_COMMIT: process.env.NOEMA_SOURCE_COMMIT || revision.stdout.trim() },
