@@ -42,11 +42,11 @@ The currently verified Studionet deployment is:
 
 | Component | Address | Deployment transaction |
 |---|---|---|
-| NoemaHub | `0xe4C8fCeD5Ba04019A4816D7F51Daa3EAacc26E40` | `0x8e849533d50b3fa387280f09e884593f1ef9f9a354f21482c4b60536bdaa5046` |
-| SourceWitness | `0x2988f0021A834385c9Cf33B7687C8b97B59D3Ea0` | `0x5255394e8c301896ae497892be9ed2c5d54cc76d3ada56f15d120b4039bf9b0d` |
-| VerdictEngine | `0x6C3BD278F19AAcbd91b776D7DF8883C01f738d96` | `0x72607c2d668d5ad61326376ae67ea8abd1b53822a30a4ed830b195c3f8962d65` |
+| NoemaHub | `0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3` | `0x0efb2045c491d1eef4742d2a5de96402130262fbfbc0134215da8f5139008cd0` |
+| SourceWitness | `0x8B86CA98cc0bfaCf7995578DAB10F956C275c82c` | `0x555c97ff32d0b538f3d6aa178a28f1cc50c17c871aa2ac2e9bfa4548b1407965` |
+| VerdictEngine | `0xC886a61cc0402Db8b71ec0405a658D0e32b2120D` | `0x58c4ffa340039378e8e1c3f9d410362f335daeb434e8912000b89bfcb7e95658` |
 
-The one-time binding transaction is `0xebcc0275b54ad4a95d19a9c9cfd539640a21ae1c4fa0e668871bc26aa2ccb14c`.
+The one-time binding transaction is `0xc6ba6e1c57cfd2d496a0f6e9cec181d6b365643fc2a4bca3123efcfe604cb98e`.
 
 ## Real-network acceptance test
 
@@ -61,5 +61,7 @@ NOEMA_E2E_PHASE=research genlayer deploy
 ```
 
 The verified run created `noema-1`, sealed and revealed `note-1`, fetched the official README and LICENSE, resolved `POSITION_A`, credited the researcher `0.0011 GEN`, and ended with `accounting_ok=true`. Transaction hashes, provenance digests, manifest roots, decisive IDs, and the final records are stored in `deployments/e2e-studionet.json`.
+
+The verdict records `contribution_required=true` and `counterfactual_outcome=UNRESOLVED`. A withdrawal was also exercised. Parent transaction `0xfe3b…6877` finalized successfully and emitted child `0xbc70…b744` for `0.0011 GEN`, but StudioNet finalized the child with `Contract <researcher EOA> not found`, `value_credited=false`, and no recipient balance increase. Native payout is therefore paused in production and is not claimed as complete. The full failure record is retained in the same artifact for runtime maintainers.
 
 The frontend is deployed at [neoma-hub.vercel.app](https://neoma-hub.vercel.app). Its `/api/health` endpoint verifies the RPC, chain ID, and configured Hub.

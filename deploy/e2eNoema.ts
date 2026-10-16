@@ -29,7 +29,17 @@ function saveRun(run: any): void { writeFileSync(E2E_PATH, JSON.stringify(run, n
 
 async function write(client: GenLayerClient<any>, hub: `0x${string}`, functionName: string, args: unknown[], value = 0n): Promise<string> {
   const hash = await client.writeContract({ address: hub, functionName, args: args as any[], value });
-  await client.waitForTransactionReceipt({ hash: hash as TransactionHash, status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 });
+  const receipt: any = await client.waitForTransactionReceipt({ hash: hash as TransactionHash,
+    status: TransactionStatus.FINALIZED, retries: 240, interval: 5_000 });
+  const status = String(receipt?.statusName ?? receipt?.status_name ?? "").toUpperCase();
+  const execution = String(receipt?.txExecutionResultName ?? receipt?.tx_execution_result_name ?? "").toUpperCase();
+  const leader = Array.isArray(receipt?.consensus_data?.leader_receipt)
+    ? receipt.consensus_data.leader_receipt.find((item: any) => item?.mode === "leader") : undefined;
+  const nestedSuccess = String(leader?.execution_result ?? "").toUpperCase() === "SUCCESS"
+    && String(leader?.result?.status ?? "").toLowerCase() === "return";
+  if (status !== "FINALIZED" || !(["FINISHED_WITH_RETURN", "FINISHEDWITHRETURN"].includes(execution) || nestedSuccess)) {
+    throw new Error(`${functionName} failed: ${status || "UNKNOWN"} / ${execution || "UNKNOWN"}`);
+  }
   return String(hash);
 }
 
@@ -105,6 +115,38 @@ export default async function main(client: GenLayerClient<any>) {
     saveRun(run);
     return { dossierId: run.dossierId, submissionId, status: resolved.status, resolution: resolved.resolution,
       decisiveIds: resolved.decisive_ids, researcherCredit, accountingOk: stats.accounting_ok };
+  }
+  if (phase === "withdraw") {
+    const creditBefore = await read(client, hub, "get_credit", [RESEARCHER]);
+    if (BigInt(creditBefore) === 0n) throw new Error("No researcher credit is available for withdrawal proof");
+    const walletBefore = await client.getBalance({ address: RESEARCHER as `0x${string}` });
+    const withdrawalTxHash = await write(client, hub, "withdraw", []);
+    const creditAfter = await read(client, hub, "get_credit", [RESEARCHER]);
+    let walletAfter = await client.getBalance({ address: RESEARCHER as `0x${string}` });
+    for (let attempt = 0; attempt < 60 && BigInt(walletAfter) <= BigInt(walletBefore); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      walletAfter = await client.getBalance({ address: RESEARCHER as `0x${string}` });
+    }
+    const statsAfterWithdrawal = await read(client, hub, "get_stats", []);
+    const withdrawalAttempt = { withdrawalTxHash, creditBefore, creditAfter,
+      walletBefore: walletBefore.toString(), walletAfter: walletAfter.toString(),
+      accountingOk: statsAfterWithdrawal.accounting_ok, completedAt: new Date().toISOString(),
+      verifiedPayout: BigInt(creditAfter) === 0n && BigInt(walletAfter) > BigInt(walletBefore)
+        && Boolean(statsAfterWithdrawal.accounting_ok) };
+    Object.assign(run, { withdrawalAttempt });
+    saveRun(run);
+    if (BigInt(creditAfter) !== 0n || BigInt(walletAfter) <= BigInt(walletBefore) || !statsAfterWithdrawal.accounting_ok) {
+      throw new Error(`Withdrawal invariants failed: ${JSON.stringify({ creditBefore, creditAfter,
+        walletBefore: walletBefore.toString(), walletAfter: walletAfter.toString(), statsAfterWithdrawal })}`);
+    }
+    let duplicateRejected = false;
+    try { await write(client, hub, "withdraw", []); } catch { duplicateRejected = true; }
+    if (!duplicateRejected) throw new Error("Duplicate withdrawal unexpectedly succeeded");
+    Object.assign(run, { withdrawal: { withdrawalTxHash, creditBefore, creditAfter,
+      walletBefore: walletBefore.toString(), walletAfter: walletAfter.toString(), duplicateRejected,
+      accountingOk: statsAfterWithdrawal.accounting_ok, completedAt: new Date().toISOString() } });
+    saveRun(run);
+    return run.withdrawal;
   }
   throw new Error(`Unknown NOEMA_E2E_PHASE: ${phase}`);
 }

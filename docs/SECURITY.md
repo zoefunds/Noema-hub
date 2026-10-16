@@ -18,7 +18,7 @@
 - Only the configured witness and engine can call their corresponding callbacks.
 - Only the configured Hub can request worker execution.
 - An attested candidate is judged against exactly one manifest root.
-- A resolved verdict names existing, unique decisive IDs.
+- A resolved verdict names at most 12 existing, unique decisive IDs, includes the current candidate, and is unresolved without it.
 - Component addresses have no post-bootstrap setter.
 - No administrator can seize funds, replace a verdict, or bypass the queue.
 - All transfers use pull credits.
@@ -29,7 +29,7 @@ Contract prompts label all dossier and web content as untrusted data and instruc
 
 ## Source limitations
 
-An HTTPS response proves what validators fetched at their observation time, not that a publisher will preserve it forever. Noema stores a content digest to make later copies comparable. GenVM does not currently expose a cryptographic redirect-chain receipt; the protocol therefore preserves requested host and document-declared canonical URL separately and never describes the latter as a transport proof.
+An HTTPS response proves the bytes validators fetched for a requested URL at their observation time, not the publisher identity, final response origin, or redirect chain. Noema stores the normalized requested origin separately, leaves verified response provenance empty when GenVM does not expose it, and stores a content digest for later comparison. Only 2xx responses are semantically evaluated.
 
 Dynamic resources can vary between validators. Such instability may prevent consensus. Researchers should prefer first-party records with stable content and durable URLs.
 

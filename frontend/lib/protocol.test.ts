@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { disclosureCommitment } from "./liveProtocol";
+import { assertSuccessfulReceipt, disclosureCommitment } from "./liveProtocol";
 
 describe("disclosure commitment", () => {
   const input = { dossierId: "noema-7", url: "https://example.org/report", claim: "The release shipped.", salt: "ab".repeat(32) };
@@ -12,5 +12,19 @@ describe("disclosure commitment", () => {
     const original = disclosureCommitment(input, `0x${"1".repeat(40)}`, `0x${"2".repeat(40)}`);
     expect(original).not.toBe(disclosureCommitment(input, `0x${"1".repeat(40)}`, `0x${"3".repeat(40)}`));
     expect(original).not.toBe(disclosureCommitment({ ...input, salt: "cd".repeat(32) }, `0x${"1".repeat(40)}`, `0x${"2".repeat(40)}`));
+  });
+});
+
+describe("GenVM receipt acceptance", () => {
+  it("requires finality and successful execution", () => {
+    expect(() => assertSuccessfulReceipt({ statusName: "Finalized", txExecutionResultName: "FinishedWithReturn" })).not.toThrow();
+    expect(() => assertSuccessfulReceipt({ status_name: "FINALIZED", consensus_data: { leader_receipt: [
+      { mode: "leader", execution_result: "SUCCESS", result: { status: "return" } },
+    ] } })).not.toThrow();
+    expect(() => assertSuccessfulReceipt({ statusName: "Finalized", txExecutionResultName: "FinishedWithError" })).toThrow(/execution failed/);
+    expect(() => assertSuccessfulReceipt({ status_name: "FINALIZED", consensus_data: { leader_receipt: [
+      { mode: "leader", execution_result: "SUCCESS", result: { status: "error" } },
+    ] } })).toThrow(/execution failed/);
+    expect(() => assertSuccessfulReceipt({ statusName: "Accepted", txExecutionResultName: "FinishedWithReturn" })).toThrow(/execution failed/);
   });
 });

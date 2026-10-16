@@ -32,10 +32,42 @@ def test_workers_are_bound_and_callbacks_are_authenticated():
 def test_provenance_and_closure_consensus_fields_are_code_level_invariants():
     witness = WITNESS.read_text()
     engine = ENGINE.read_text()
-    for field in ("content_digest", "http_status", "publisher", "canonical_url", "published_at"):
+    for field in ("content_digest", "http_status", "requested_origin", "verified_response_origin",
+                  "transport_origin_verified", "document_publisher", "document_canonical_url"):
         assert field in witness
-    for field in ("manifest_root", "decisive_ids", "basis_digest", "outcome", "sufficient"):
+    for field in ("manifest_root", "decisive_ids", "basis_digest", "outcome", "sufficient",
+                  "counterfactual_outcome", "contribution_required"):
         assert field in engine
+
+
+def test_http_and_origin_provenance_are_enforced_before_semantic_acceptance():
+    witness = WITNESS.read_text()
+    assert "SUCCESS_STATUS_MIN <= status_code <= SUCCESS_STATUS_MAX" in witness
+    assert 'parts.scheme != "https"' in witness
+    assert "parts.username or parts.password" in witness
+    assert '"transport_origin_verified": False' in witness
+    assert 'answer["document_canonical_url"] = ""' in witness
+
+
+def test_executable_settlement_requires_candidate_and_bounded_decisive_set():
+    hub = HUB.read_text()
+    engine = ENGINE.read_text()
+    assert "MAX_DECISIVE_IDS = 12" in hub and "MAX_DECISIVE_IDS = 12" in engine
+    assert 'submission["id"] not in decisive_ids' in hub
+    assert 'result.get("counterfactual_outcome") != "UNRESOLVED"' in hub
+    assert 'result.get("contribution_required") is not True' in hub
+    assert "len(ids) > MAX_DECISIVE_IDS" in engine
+
+
+def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
+    hub = HUB.read_text()
+    zero = hub.index("self.credits[account] = u256(0)")
+    transfer = hub.index("emit_transfer(value=u256(amount))")
+    assert zero < transfer
+    assert "gl.transfer(" not in hub
+    assert "def __on_errored_message__" in hub
+    assert 'amount != expected' in hub
+    assert "self._credit(account, amount)" in hub
 
 
 def test_bounds_and_timeout_rollback_are_explicit():

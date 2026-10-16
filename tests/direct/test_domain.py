@@ -4,6 +4,7 @@ import pytest
 from contracts.domain import (
     MAX_EVIDENCE,
     MAX_LIFETIME_SUBMISSIONS,
+    MAX_DECISIVE_IDS,
     commitment_for,
     evidence_key,
     manifest_root,
@@ -56,6 +57,18 @@ def test_manifest_root_is_order_and_provenance_sensitive():
     assert root != manifest_root(altered)
 
 
+def test_manifest_root_matches_published_studionet_vector():
+    records = [
+        {"id": "base-1", "claim_digest": "298eb98ab840effe4ed8c1381e5a44948e91ff015acb4bd5c1291b1add83c393",
+         "content_digest": "ba4e1f69ff48386e72a9c5e1edaf76aad64a475c2d51af79ccba6d1128261ba7",
+         "source_host": "raw.githubusercontent.com"},
+        {"id": "note-1", "claim_digest": "e0eba3612db9a6c80d2040c007bf37ef83ef0a3e5d9ed1b107494c64332e961b",
+         "content_digest": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+         "source_host": "raw.githubusercontent.com"},
+    ]
+    assert manifest_root(records) == "9f18409690f81c54c257d64c0e15572e7c77674afa5c7707de57e4411c87f000"
+
+
 def test_resolved_decision_requires_valid_unique_decisive_ids_and_basis():
     result = validate_decision({"outcome": "POSITION_A", "decisive_ids": ["base-1", "note-4"],
                                 "basis": "Together these records satisfy both clauses."}, {"base-1", "note-4"})
@@ -64,6 +77,24 @@ def test_resolved_decision_requires_valid_unique_decisive_ids_and_basis():
         validate_decision({"outcome": "POSITION_A", "decisive_ids": [], "basis": "x"}, {"base-1"})
     with pytest.raises(ValueError):
         validate_decision({"outcome": "UNRESOLVED", "decisive_ids": ["base-1"], "basis": "x"}, {"base-1"})
+
+
+def test_candidate_independent_verdict_cannot_receive_reward():
+    with pytest.raises(ValueError, match="current candidate"):
+        validate_decision({"outcome": "POSITION_A", "decisive_ids": ["base-1"],
+                           "counterfactual_outcome": "POSITION_A", "basis": "Baseline alone."},
+                          {"base-1", "note-4"}, candidate_id="note-4")
+    with pytest.raises(ValueError, match="unresolved without"):
+        validate_decision({"outcome": "POSITION_A", "decisive_ids": ["base-1", "note-4"],
+                           "counterfactual_outcome": "POSITION_A", "basis": "Candidate is redundant."},
+                          {"base-1", "note-4"}, candidate_id="note-4")
+
+
+def test_oversized_decisive_set_is_rejected():
+    ids = {f"note-{index}" for index in range(MAX_DECISIVE_IDS + 1)}
+    with pytest.raises(ValueError, match="invalid decisive ids"):
+        validate_decision({"outcome": "POSITION_A", "decisive_ids": sorted(ids),
+                           "basis": "Too many records."}, ids)
 
 
 def test_large_graph_has_hard_cumulative_bounds():

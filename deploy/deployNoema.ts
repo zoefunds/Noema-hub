@@ -4,8 +4,13 @@ import type { DecodedDeployData, GenLayerClient, TransactionHash } from "genlaye
 import { TransactionStatus } from "genlayer-js/types";
 
 function receiptAccepted(receipt: any): boolean {
-  const name = receipt?.statusName ?? receipt?.status_name;
-  return name === "FINALIZED" || name === "ACCEPTED" || [5, 6, 7].includes(receipt?.status) || receipt?.result === 6;
+  const status = String(receipt?.statusName ?? receipt?.status_name ?? "").toUpperCase();
+  const execution = String(receipt?.txExecutionResultName ?? receipt?.tx_execution_result_name ?? "").toUpperCase();
+  const leader = Array.isArray(receipt?.consensus_data?.leader_receipt)
+    ? receipt.consensus_data.leader_receipt.find((item: any) => item?.mode === "leader") : undefined;
+  const nestedSuccess = String(leader?.execution_result ?? "").toUpperCase() === "SUCCESS"
+    && String(leader?.result?.status ?? "").toLowerCase() === "return";
+  return status === "FINALIZED" && (["FINISHED_WITH_RETURN", "FINISHEDWITHRETURN"].includes(execution) || nestedSuccess);
 }
 
 async function deploy(client: GenLayerClient<any>, file: string, args: unknown[] = []) {

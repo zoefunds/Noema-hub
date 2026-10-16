@@ -15,6 +15,7 @@ MAX_BASELINE = 4
 MAX_ACTIVE = 24
 MAX_EVIDENCE = 18
 MAX_LIFETIME_SUBMISSIONS = 72
+MAX_DECISIVE_IDS = 12
 MAX_PAGE = 24
 REVEAL_WINDOW = 1200
 STAGE_WINDOW = 1800
@@ -68,6 +69,7 @@ class NoemaHub(gl.Contract):
     commitments: TreeMap[str, str]
     reservations: TreeMap[str, str]
     credits: TreeMap[Address, u256]
+    pending_outbound: TreeMap[Address, u256]
     witness_address: str
     engine_address: str
     bootstrapper: str
@@ -171,14 +173,14 @@ class NoemaHub(gl.Contract):
             dossier["question"], dossier["decision_rule"], dossier["source_policy"],
             _json(dossier["evidence"]), url, claim)
 
-    def _request_verdict(self, dossier, request_id):
+    def _request_verdict(self, dossier, request_id, candidate_id=""):
         dossier["pending_id"] = request_id
         dossier["stage_deadline"] = str(_now() + STAGE_WINDOW)
         self._save_dossier(dossier)
         engine = gl.get_contract_at(Address(self.engine_address))
         engine.emit(on="finalized").resolve(request_id, str(gl.message.contract_address),
             dossier["question"], dossier["decision_rule"], dossier["position_a"],
-            dossier["position_b"], _json(dossier["evidence"]))
+            dossier["position_b"], _json(dossier["evidence"]), candidate_id)
 
     @gl.public.write.payable
     def open_dossier(self, title: str, question: str, decision_rule: str, position_a: str,
@@ -279,12 +281,16 @@ class NoemaHub(gl.Contract):
             dossier["evidence"].append(candidate)
             dossier["manifest_root"] = _manifest_root(dossier["evidence"])
             self._save_submission(submission)
-            self._request_verdict(dossier, submission["id"])
+            self._request_verdict(dossier, submission["id"], submission["id"])
 
     def _evidence_record(self, item_id, url, claim, result, kind):
         return {"id": item_id, "kind": kind, "requested_url": url,
-            "source_host": result.get("requested_host", url.split("/")[2].lower()),
-            "canonical_url": result.get("canonical_url", ""), "publisher": result.get("publisher", ""),
+            "requested_origin": result.get("requested_origin", ""),
+            "source_host": result.get("requested_host", ""),
+            "verified_response_origin": result.get("verified_response_origin", ""),
+            "transport_origin_verified": bool(result.get("transport_origin_verified", False)),
+            "canonical_url": result.get("document_canonical_url", ""),
+            "publisher": result.get("document_publisher", ""),
             "published_at": result.get("published_at", ""), "claim": claim,
             "claim_digest": result["claim_digest"], "content_digest": result["content_digest"],
             "observed_at": result["observed_at"], "http_status": result.get("http_status", 0)}
@@ -314,6 +320,12 @@ class NoemaHub(gl.Contract):
             raise gl.vm.UserError("[EXPECTED] stale verdict callback")
         if result.get("manifest_root") != dossier["manifest_root"]:
             raise gl.vm.UserError("[EXPECTED] verdict manifest root mismatch")
+        decisive_ids = result.get("decisive_ids")
+        valid_ids = [item["id"] for item in dossier["evidence"]]
+        if (not isinstance(decisive_ids, list) or len(decisive_ids) > MAX_DECISIVE_IDS or
+                len(decisive_ids) != len(set(decisive_ids)) or
+                any(not isinstance(item, str) or item not in valid_ids for item in decisive_ids)):
+            raise gl.vm.UserError("[EXPECTED] invalid decisive evidence set")
         submission["verdict"] = result
         if result.get("outcome") == "UNRESOLVED":
             submission["status"] = "ATTESTED_NON_DECISIVE"
@@ -322,6 +334,10 @@ class NoemaHub(gl.Contract):
             if len(dossier["evidence"]) >= MAX_EVIDENCE:
                 self._close_refund(dossier, "EVIDENCE_CAP_REACHED")
         else:
+            if (submission["id"] not in decisive_ids or
+                    result.get("counterfactual_outcome") != "UNRESOLVED" or
+                    result.get("contribution_required") is not True):
+                raise gl.vm.UserError("[EXPECTED] current submission is not necessary for resolution")
             reward = int(dossier["reward_atto"])
             self.reward_escrow = u256(int(self.reward_escrow) - reward)
             self._credit(submission["researcher"], reward)
@@ -472,7 +488,22 @@ class NoemaHub(gl.Contract):
         self.credits[account] = u256(0)
         self.claimable = u256(int(self.claimable) - amount)
         self.withdrawn = u256(int(self.withdrawn) + amount)
-        gl.transfer(account, u256(amount))
+        self.pending_outbound[account] = u256(amount)
+        # Native GEN leaves the contract through GenVM's message-based transfer.
+        # Effects are committed before interaction, so a failed emission reverts
+        # the complete call and cannot consume or duplicate the credit.
+        gl.get_contract_at(account).emit_transfer(value=u256(amount))
+
+    @gl.public.write.payable
+    def __on_errored_message__(self) -> None:
+        account = gl.message.sender_address
+        amount = int(gl.message.value)
+        expected = int(self.pending_outbound[account]) if account in self.pending_outbound else 0
+        if amount == 0 or amount != expected:
+            raise gl.vm.UserError("[EXPECTED] unknown failed outbound transfer")
+        self.pending_outbound[account] = u256(0)
+        self.withdrawn = u256(int(self.withdrawn) - amount)
+        self._credit(account, amount)
 
     @gl.public.view
     def get_dossier(self, dossier_id: str) -> dict:
@@ -516,4 +547,5 @@ class NoemaHub(gl.Contract):
         return {"product": "Noema", "version": VERSION, "chain_id": CHAIN_ID,
             "dossiers": str(len(self.dossier_ids)), "max_evidence_per_dossier": str(MAX_EVIDENCE),
             "max_lifetime_submissions": str(MAX_LIFETIME_SUBMISSIONS),
+            "max_decisive_ids": str(MAX_DECISIVE_IDS),
             "accounting_ok": int(self.deposited) == int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable) + int(self.withdrawn)}

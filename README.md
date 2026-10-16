@@ -38,8 +38,8 @@ NoemaHub
 Every accepted record persists:
 
 - requested URL and requested host;
-- canonical fetched URL and source-host publisher identity;
-- publication time when the document exposes one;
+- normalized requested URL, requested host and requested origin;
+- independently verified response origin when the runtime exposes one (empty on current StudioNet);
 - HTTP status and validator observation time;
 - SHA-256 digest of the complete fetched response body;
 - SHA-256 digest of the exact accepted claim;
@@ -47,7 +47,7 @@ Every accepted record persists:
 
 The Hub derives an ordered manifest root from evidence ID, claim digest, content digest, and source host. A verdict callback is rejected unless its manifest root matches current Hub state. Validators independently compare the final outcome, sufficiency, ordered decisive IDs, and closure-basis digest.
 
-Noema does not claim to obtain a transport-level redirect trace from GenVM. It records both the requested URL and the canonical fetched URL used by validators, with the source host as publisher identity, making that boundary explicit and auditable.
+Noema does not claim to obtain a transport-level redirect trace, publisher identity, or final response URL when GenVM does not expose them. Requested provenance is stored separately and `transport_origin_verified=false`; requested data is never promoted to authenticated canonical provenance. Only HTTP 2xx responses can become attested evidence.
 
 ## Bounded state and liveness
 
@@ -69,9 +69,9 @@ Terminal submissions do not reopen lifetime capacity. This keeps storage, queue 
 2. Each researcher deposits the dossier’s exact bond while sealing a domain-separated commitment.
 3. An unavailable source refunds the bond; a rejected disclosure credits it to the sponsor.
 4. A valid but non-decisive disclosure refunds the bond and remains in the manifest.
-5. A decisive disclosure credits reward and bond to the researcher.
+5. A disclosure earns the reward only when it is named in the bounded decisive set and removing it makes the rule unresolved.
 6. Expiry and bounded-cap closure credit the remaining reward to the sponsor.
-7. Recipients withdraw credits in a separate call.
+7. Recipients withdraw credits in a separate call when the target network supports contract-to-wallet value delivery.
 
 Every semantic stage has an explicit deadline. After timeout, any caller can release the queue: baseline timeouts refund the sponsor, while research timeouts refund the researcher and roll back any tentatively appended candidate.
 
@@ -126,15 +126,17 @@ The release configuration targets GenLayer Studionet only:
 - explorer: `https://explorer-studio.genlayer.com`
 - wallet: injected EIP-1193 provider
 
-See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and [deployment](docs/DEPLOYMENT.md) before using the protocol.
+See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deployment](docs/DEPLOYMENT.md), and the [verification record](docs/VERIFICATION.md) before using the protocol.
 
 ## Verified Studionet release
 
-- Hub: `0xe4C8fCeD5Ba04019A4816D7F51Daa3EAacc26E40`
-- SourceWitness: `0x2988f0021A834385c9Cf33B7687C8b97B59D3Ea0`
-- VerdictEngine: `0x6C3BD278F19AAcbd91b776D7DF8883C01f738d96`
+- Hub: `0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3`
+- SourceWitness: `0x8B86CA98cc0bfaCf7995578DAB10F956C275c82c`
+- VerdictEngine: `0xC886a61cc0402Db8b71ec0405a658D0e32b2120D`
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
-- result: `POSITION_A`, researcher credited `0.0011 GEN`, accounting invariant true
+- result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
+
+StudioNet currently rejects emitted native transfers to ordinary wallet addresses as `Contract <EOA> not found`. The finalized failed child transaction and unchanged wallet balance are preserved in the acceptance artifact. The production UI keeps native withdrawal paused until this runtime behavior is corrected; crediting and settlement remain fully auditable, but wallet payout is not represented as successful.
 
 The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The complete public-network run is preserved in `deployments/e2e-studionet.json`.

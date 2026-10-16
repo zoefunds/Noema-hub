@@ -36,7 +36,8 @@ The witness fetches the requested HTTPS resource with `gl.nondet.web.get`. It ha
 - status;
 - HTTP status;
 - content digest;
-- publisher, canonical URL and publication time;
+- normalized requested origin and host;
+- verified response origin only when provided by the transport runtime;
 - same subject;
 - policy compliance;
 - direct claim support;
@@ -48,9 +49,9 @@ Explanatory witness prose is retained for inspection but cannot alter settlement
 
 ## Verdict packet
 
-The Hub appends a fully attested candidate, recomputes the ordered manifest root, and calls the engine. The engine receives only attested records. It verifies every decisive ID is present and unique. A resolved outcome requires at least one decisive ID; an unresolved outcome permits none.
+The Hub appends a fully attested candidate, recomputes the ordered manifest root, and calls the engine. The engine evaluates both the full manifest and a counterfactual manifest with that candidate removed. Settlement requires a resolved full verdict, an unresolved counterfactual verdict, and the current candidate in the unique decisive set. Both the Hub and engine enforce the 12-ID limit.
 
-Each validator compares outcome, sufficiency, the ordered decisive set, and the digest of its closure basis. The engine also returns the manifest root it judged. The Hub rejects a callback for any other root.
+Each validator compares outcome, sufficiency, the ordered decisive set, and the digest of its closure basis for both decisions. The engine also returns both manifest roots and the counterfactual outcome. The Hub rejects a callback for another root or a candidate-independent result.
 
 ## Finite resource model
 

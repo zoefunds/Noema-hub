@@ -56,16 +56,16 @@ def commitment_for(chain_id: str, hub: str, dossier_id: str, researcher: str,
 
 
 def manifest_root(items: list[dict]) -> str:
-    leaves = [digest_text(canonical_json({
+    manifest = [{
         "id": item["id"],
         "claim_digest": item["claim_digest"],
         "content_digest": item["content_digest"],
         "source_host": item["source_host"],
-    })) for item in items]
-    return digest_text(canonical_json(leaves))
+    } for item in items]
+    return digest_text(canonical_json(manifest))
 
 
-def validate_decision(result: dict, valid_ids: set[str]) -> dict:
+def validate_decision(result: dict, valid_ids: set[str], candidate_id: str = "") -> dict:
     outcome = result.get("outcome")
     if outcome not in ("POSITION_A", "POSITION_B", "UNRESOLVED"):
         raise ValueError("unknown outcome")
@@ -81,7 +81,12 @@ def validate_decision(result: dict, valid_ids: set[str]) -> dict:
         raise ValueError("an unresolved decision cannot name decisive evidence")
     if outcome != "UNRESOLVED" and not clean:
         raise ValueError("a resolved decision must name decisive evidence")
+    if outcome != "UNRESOLVED" and candidate_id and candidate_id not in clean:
+        raise ValueError("the current candidate must be decisive")
+    if outcome != "UNRESOLVED" and candidate_id and result.get("counterfactual_outcome") != "UNRESOLVED":
+        raise ValueError("the outcome must be unresolved without the current candidate")
     basis = result.get("basis")
     if not isinstance(basis, str) or not basis.strip() or len(basis) > 1200:
         raise ValueError("invalid basis")
-    return {"outcome": outcome, "decisive_ids": clean, "basis": basis.strip()}
+    return {"outcome": outcome, "decisive_ids": clean, "basis": basis.strip(),
+            "counterfactual_outcome": result.get("counterfactual_outcome", "")}

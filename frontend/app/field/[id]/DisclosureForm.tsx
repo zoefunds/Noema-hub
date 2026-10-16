@@ -25,6 +25,7 @@ export function DisclosureForm({ dossier }: { dossier: Dossier }) {
       setNotice(`Seal submitted (${hash.slice(0, 12)}…). Waiting for finality…`);
       await waitForFinalization(hash);
       const submissionId = await getSubmissionForCommitment(commitment, false);
+      if (!submissionId) throw new Error("Seal finalized but the Hub did not record the commitment.");
       updatePending(commitment, { submissionId });
       setNotice(`Seal finalized as ${submissionId}. Your claim and salt remain only in this browser. Open Vault to reveal. Explorer: ${EXPLORER_URL}/tx/${hash}`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not prepare disclosure."); }

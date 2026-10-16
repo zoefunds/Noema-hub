@@ -11,6 +11,7 @@ export const CHAIN_HEX = `0x${CHAIN_ID.toString(16)}`;
 export const RPC_URL = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
 export const EXPLORER_URL = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER || "https://explorer-studio.genlayer.com";
 export const HUB_ADDRESS = process.env.NEXT_PUBLIC_NOEMA_HUB_ADDRESS || "";
+export const NATIVE_PAYOUTS_ENABLED = process.env.NEXT_PUBLIC_NATIVE_PAYOUTS_ENABLED === "true";
 const storageKey = "noema:pending-disclosures:v1";
 const rpcTimes: number[] = [];
 const readCache = new Map<string, { expires: number; value: unknown }>();
@@ -56,6 +57,7 @@ export async function getCredit(address: string, latest = false): Promise<string
 export async function listSubmissions(id: string, latest = false): Promise<any[]> { return read("list_submissions", [id], latest); }
 export async function findLatestDossier(address: string): Promise<string> { return read("find_latest_dossier_by_sponsor", [address]); }
 export async function getSubmissionForCommitment(commitment: string, latest = false): Promise<string> { return read("get_submission_for_commitment", [commitment], latest); }
+export async function getSubmission(id: string, latest = false): Promise<any> { return read("get_submission", [id], latest); }
 
 export async function ensureStudionet(): Promise<void> {
   const injected = provider(); if (!injected) throw new Error("Install an injected EIP-1193 wallet to continue.");
@@ -75,8 +77,23 @@ export async function submitHubWrite(address: string, functionName: string, args
   const client = createClient({ chain: studionet, endpoint: RPC_URL, account: address as `0x${string}`, provider: injected } as any);
   const hash = await withRpc(() => client.writeContract({ address: assertHub(), functionName, args, value } as any)); readCache.clear(); return String(hash);
 }
+export function assertSuccessfulReceipt(receipt: any): void {
+  const status = String(receipt?.statusName ?? receipt?.status_name ?? "").toUpperCase();
+  const execution = String(receipt?.txExecutionResultName ?? receipt?.tx_execution_result_name ?? "").toUpperCase();
+  const leader = Array.isArray(receipt?.consensus_data?.leader_receipt)
+    ? receipt.consensus_data.leader_receipt.find((item: any) => item?.mode === "leader") : undefined;
+  const nestedSuccess = String(leader?.execution_result ?? "").toUpperCase() === "SUCCESS"
+    && String(leader?.result?.status ?? "").toLowerCase() === "return";
+  const namedSuccess = ["FINISHED_WITH_RETURN", "FINISHEDWITHRETURN"].includes(execution);
+  if (status !== "FINALIZED" || !(namedSuccess || nestedSuccess)) {
+    throw new Error(`GenVM execution failed (${status || "UNKNOWN"} / ${execution || "UNKNOWN"}).`);
+  }
+}
 export async function waitForFinalization(hash: string): Promise<unknown> {
-  return withRpc(() => readClient().waitForTransactionReceipt({ hash: hash as any, status: "FINALIZED" as any, retries: 240, interval: 15_000 }));
+  const receipt: any = await withRpc(() => readClient().waitForTransactionReceipt({ hash: hash as any,
+    status: "FINALIZED" as any, retries: 240, interval: 15_000 }));
+  assertSuccessfulReceipt(receipt);
+  return receipt;
 }
 export function parseGen(value: string): bigint {
   if (!/^\d+(\.\d{1,18})?$/.test(value.trim())) throw new Error("Enter a valid GEN amount.");

@@ -5,11 +5,14 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
+from urllib.parse import urlsplit, urlunsplit
 
 VERSION = "1.0.0"
 FIELDS = ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
           "materially_new", "internally_consistent")
 MAX_FETCH = 24000
+SUCCESS_STATUS_MIN = 200
+SUCCESS_STATUS_MAX = 299
 
 
 def _json(value):
@@ -30,6 +33,20 @@ def _address(value):
     if re.fullmatch(r"0x[0-9a-fA-F]{40}", value) is None or int(value[2:], 16) == 0:
         raise gl.vm.UserError("[EXPECTED] invalid hub address")
     return value
+
+
+def _requested_provenance(value):
+    try:
+        parts = urlsplit(value.strip())
+        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+            raise ValueError("unsafe URL")
+        host = parts.hostname.lower()
+        port = parts.port
+        authority = host if port in (None, 443) else f"{host}:{port}"
+        normalized = urlunsplit(("https", authority, parts.path or "/", parts.query, ""))
+        return normalized, host, f"https://{authority}"
+    except Exception:
+        raise gl.vm.UserError("[EXPECTED] credential-free HTTPS source required") from None
 
 
 def _normalize(raw):
@@ -96,11 +113,17 @@ def _inspect(question, rule, policy, accepted_manifest, requested_url, claim):
             "candidate": {"requested_url": requested_url, "claim": claim}, "http_status": status_code,
             "document": body})
         )
+        if not SUCCESS_STATUS_MIN <= status_code <= SUCCESS_STATUS_MAX:
+            return {"status": "REJECTED", **{f: False for f in FIELDS},
+                    "document_publisher": "", "document_canonical_url": "", "published_at": "",
+                    "content_digest": content_digest, "http_status": status_code,
+                    "basis": f"HTTP status {status_code} is outside the accepted 2xx range."}
         answer = _normalize(gl.nondet.exec_prompt(prompt, response_format="json"))
-        # Network-derived identifiers are canonical provenance. They cannot drift
-        # with model phrasing and validators replay the same requested resource.
-        answer["publisher"] = requested_url.split("/")[2].lower()
-        answer["canonical_url"] = requested_url
+        # GenVM's current web response proves the bytes and status returned for
+        # the requested URL, but does not expose an authenticated final URL or
+        # redirect chain. Never promote the requested origin to verified response provenance.
+        answer["document_publisher"] = ""
+        answer["document_canonical_url"] = ""
         answer["published_at"] = ""
         answer["content_digest"] = content_digest
         answer["http_status"] = status_code
@@ -113,7 +136,8 @@ def _inspect(question, rule, policy, accepted_manifest, requested_url, claim):
             own = leader_fn()
             proposed = leader_result.calldata
             # Economic validity and durable provenance are both consensus fields.
-            keys = ("status", "content_digest", "http_status", "publisher", "canonical_url", "published_at") + FIELDS
+            keys = ("status", "content_digest", "http_status", "document_publisher",
+                    "document_canonical_url", "published_at") + FIELDS
             return all(own.get(key) == proposed.get(key) for key in keys)
         except Exception:
             return False
@@ -136,9 +160,12 @@ class SourceWitness(gl.Contract):
             raise gl.vm.UserError("[EXPECTED] only the bound hub can request an attestation")
         if request_id in self.records:
             raise gl.vm.UserError("[EXPECTED] request already witnessed")
-        result = _inspect(question, rule, policy, accepted_manifest, requested_url, claim)
-        result.update({"request_id": request_id, "requested_url": requested_url,
-                       "requested_host": requested_url.split("/")[2].lower(), "claim_digest": _sha(claim.strip()),
+        normalized_url, requested_host, requested_origin = _requested_provenance(requested_url)
+        result = _inspect(question, rule, policy, accepted_manifest, normalized_url, claim)
+        result.update({"request_id": request_id, "requested_url": normalized_url,
+                       "requested_host": requested_host, "requested_origin": requested_origin,
+                       "verified_response_origin": "", "transport_origin_verified": False,
+                       "redirect_chain": [], "claim_digest": _sha(claim.strip()),
                        "observed_at": _iso(), "consensus": "FULL_PROVENANCE_AND_VALIDITY_REPLAY"})
         self.records[request_id] = _json(result)
         self.request_ids.append(request_id)

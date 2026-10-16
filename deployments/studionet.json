@@ -4,20 +4,20 @@
   "chainId": 61999,
   "rpc": "https://studio.genlayer.com/api",
   "explorer": "https://explorer-studio.genlayer.com",
-  "deployedAt": "2026-10-16T01:37:00.017Z",
+  "deployedAt": "2026-10-16T05:15:42.985Z",
   "contracts": {
     "hub": {
-      "address": "0xe4C8fCeD5Ba04019A4816D7F51Daa3EAacc26E40",
-      "txHash": "0x8e849533d50b3fa387280f09e884593f1ef9f9a354f21482c4b60536bdaa5046"
+      "address": "0x49Cb64ba7CA953ffABE72eF34841067532FBFcF3",
+      "txHash": "0x0efb2045c491d1eef4742d2a5de96402130262fbfbc0134215da8f5139008cd0"
     },
     "witness": {
-      "address": "0x2988f0021A834385c9Cf33B7687C8b97B59D3Ea0",
-      "txHash": "0x5255394e8c301896ae497892be9ed2c5d54cc76d3ada56f15d120b4039bf9b0d"
+      "address": "0x8B86CA98cc0bfaCf7995578DAB10F956C275c82c",
+      "txHash": "0x555c97ff32d0b538f3d6aa178a28f1cc50c17c871aa2ac2e9bfa4548b1407965"
     },
     "engine": {
-      "address": "0x6C3BD278F19AAcbd91b776D7DF8883C01f738d96",
-      "txHash": "0x72607c2d668d5ad61326376ae67ea8abd1b53822a30a4ed830b195c3f8962d65"
+      "address": "0xC886a61cc0402Db8b71ec0405a658D0e32b2120D",
+      "txHash": "0x58c4ffa340039378e8e1c3f9d410362f335daeb434e8912000b89bfcb7e95658"
     },
-    "configureTxHash": "0xebcc0275b54ad4a95d19a9c9cfd539640a21ae1c4fa0e668871bc26aa2ccb14c"
+    "configureTxHash": "0xc6ba6e1c57cfd2d496a0f6e9cec181d6b365643fc2a4bca3123efcfe604cb98e"
   }
 }
