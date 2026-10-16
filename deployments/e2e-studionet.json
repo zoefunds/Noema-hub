@@ -3,38 +3,14 @@
   "network": "studionet",
   "executionMethod": "GenLayer JS CLI runner with two funded accounts",
   "browserOriginatedLifecycle": false,
-  "refreshedDeploymentRun": {
-    "startedAt": "2026-10-16T07:41:10.859Z",
-    "dossierId": "noema-2",
-    "sponsorTxHash": "0xf8685a95add41491b4073bd76d5811a583d71b11ecc57e5fff92f70d2050fc5c",
-    "txStatus": "FINALIZED",
-    "txResult": "MAJORITY_AGREE",
-    "callbackTxHash": "0x5af7dd2321042920d4f0ce7122f3d3420c085e5e3721be33010e8b22c2882a5f",
-    "callbackStatusAtLastCheck": "FINALIZED / MAJORITY_AGREE",
-    "dossierStateAtLastCheck": "OPEN",
-    "callbackFinalizedAt": "2026-10-16T07:47:00Z",
-    "baselineDecisionTxHash": "0xb01f644d50b99732d0d7d2d0768cf6fa7e5a97e2a7f4dc71891d0e094d87f00b",
-    "baselineDecisionStatus": "FINALIZED / MAJORITY_AGREE",
-    "baselineDecisionChildTxHash": "0x4062dc38f08bb4df0438337c198ccb79b729e491902629a72c0f5e107230324b",
-    "openAtLastCheck": true,
-    "baselineEvidence": {
-      "id": "base-1",
-      "url": "https://raw.githubusercontent.com/openai/codex/main/README.md",
-      "httpStatus": 200,
-      "contentDigest": "ba4e1f69ff48386e72a9c5e1edaf76aad64a475c2d51af79ccba6d1128261ba7",
-      "manifestRoot": "a425deab916a8a591b8d765ba5f4d466b0fe9f8008f5fb846d995d3ea8a0b46a"
-    },
-    "fixtureMismatch": "The deployed CLI bundle still submitted the previous README baseline and license question. No candidate or withdrawal was submitted to this dossier.",
-    "verified": false
-  },
   "startedAt": "2026-10-16T06:38:00.385Z",
   "sponsor": "0x7401c129edfc26e68fe19309fe461eb3db1058eb",
   "researcher": "0x7452084e1cf767bf19c743051cff27d9f7a87a4d",
   "dossierId": "noema-1",
   "sponsorTxHash": "0x34f1d109fd1dfe539f00b9620945f941a844429569b24927ceaa7f7c89b3b306",
   "baseline": {
-    "url": "https://api.github.com/repos/openai/codex/git/trees/main",
-    "claim": "The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text."
+    "url": "https://raw.githubusercontent.com/openai/codex/main/README.md",
+    "claim": "The official openai/codex README identifies Codex CLI as a coding agent from OpenAI that runs locally on a user's computer."
   },
   "dossierAfterBaseline": {
     "active_ids": [],
@@ -279,5 +255,29 @@
     "duplicateRejected": true,
     "accountingOk": true,
     "completedAt": "2026-10-16T06:51:30.980Z"
+  },
+  "refreshedDeploymentRun": {
+    "startedAt": "2026-10-16T07:41:10.859Z",
+    "dossierId": "noema-2",
+    "sponsorTxHash": "0xf8685a95add41491b4073bd76d5811a583d71b11ecc57e5fff92f70d2050fc5c",
+    "txStatus": "FINALIZED",
+    "txResult": "MAJORITY_AGREE",
+    "callbackTxHash": "0x5af7dd2321042920d4f0ce7122f3d3420c085e5e3721be33010e8b22c2882a5f",
+    "callbackStatusAtLastCheck": "FINALIZED / MAJORITY_AGREE",
+    "dossierStateAtLastCheck": "OPEN",
+    "callbackFinalizedAt": "2026-10-16T07:47:00Z",
+    "baselineDecisionTxHash": "0xb01f644d50b99732d0d7d2d0768cf6fa7e5a97e2a7f4dc71891d0e094d87f00b",
+    "baselineDecisionStatus": "FINALIZED / MAJORITY_AGREE",
+    "baselineDecisionChildTxHash": "0x4062dc38f08bb4df0438337c198ccb79b729e491902629a72c0f5e107230324b",
+    "openAtLastCheck": true,
+    "baselineEvidence": {
+      "id": "base-1",
+      "url": "https://raw.githubusercontent.com/openai/codex/main/README.md",
+      "httpStatus": 200,
+      "contentDigest": "ba4e1f69ff48386e72a9c5e1edaf76aad64a475c2d51af79ccba6d1128261ba7",
+      "manifestRoot": "a425deab916a8a591b8d765ba5f4d466b0fe9f8008f5fb846d995d3ea8a0b46a"
+    },
+    "fixtureMismatch": "Deployed CLI bundle submitted the previous README baseline and license question. No candidate or withdrawal was submitted to this dossier.",
+    "verified": false
   }
 }
