@@ -42,11 +42,11 @@ The currently verified Studionet deployment is:
 
 | Component | Address | Deployment transaction |
 |---|---|---|
-| NoemaHub | `0xfFf9A84A6256DCF2A971674E3bd21956b4072f12` | `0x911153644f8a09d69771592ed57db0143dec7c75169f43242763a0d5d2505900` |
-| SourceWitness | `0x83c9c59Ebf368C01468d7E8eD257ae04111bA9c5` | `0x4aa283d83a1426a2e5d96bdc9e7413daaeb287af29e5a8cb042fb13073d379d2` |
-| VerdictEngine | `0x2E9eD1d764Bfda225443AC70Bb3EE613Fd97Ba30` | `0xf150f120e0093813e1a710051cbb4f6cf83911e9bfa96e9e3e7c0d88d72c2243` |
+| NoemaHub | `0x99aaE7794Be988833CbC536cEaaE8e94E8eB1c5B` | `0x7497c6b5070df03e55e314dc5bf1c9a9fcd596fdf5cbfbb09a638fcb9639efd7` |
+| SourceWitness | `0x9aAe228eAaf7D4806498F0c189320Ec89d7069d0` | `0x27fe90f8b0e1a27d14c9e217206790110219e0b4084f9e7bd00fd689a2b36b27` |
+| VerdictEngine | `0xB9fBD0e65275853f8ba45E4Eb0502FB8c3187bbA` | `0x00278011cc0762cdf469a520738cef6e70a03522aeb981c6850efc0923b305b3` |
 
-The one-time binding transaction is `0x5a0261d2e89c8f80b9b8f793ef33f4cb9fe90b8c1facc49e50ca9d3ce56bbd5a`. This release enables native payouts through the EVM recipient interface. The exact deployed sources are verified against RPC-returned code in `deployments/studionet.json`.
+The one-time binding transaction is `0x768f91cd244d2caf791d6c32c1268e13bd30df3dcddaa22172b65b511335b6e8`. This fresh release enables native payouts through the EVM recipient interface. The exact deployed sources are verified against RPC-returned code in `deployments/studionet.json` (Hub SHA-256 `4020e8ed…`, Witness `0f4ef7d4…`, Engine `7085da39…`).
 
 ## Real-network acceptance test
 
@@ -65,7 +65,9 @@ NOEMA_E2E_PHASE=withdraw genlayer deploy
 
 The CLI scans the `deploy/` directory for scripts. `00_cleanup.ts` removes only stale generated bundles before the TypeScript test harness runs; keep generated `.compiled.js` files out of source control and do not pass the harness as `--contract`.
 
-The current end-to-end StudioNet run created `noema-4`, attested the official Git tree API baseline and raw LICENSE text, sealed/revealed `note-2`, and resolved `POSITION_A` with only `note-2` decisive and a counterfactual `UNRESOLVED` outcome without it. The researcher withdrew `0.0022 GEN` in one external transfer (accrued across two resolved dossiers on this Hub). Parent `0x117b537038f9faacaf069f1c4d1fbeed5731ab0940b7f132b2469694f58c74c6` emitted finalized child `0xd5e57ca9a0c6fa53ed73901d919a7cf56ba15e612be9b180a9c16a7a2a431cf0`; the child names the researcher wallet, reports `value_credited=true`, and carries exactly `2200000000000000` wei. Wallet balance moved from `10030099999999999997` to `10032299999999999997`, Hub credit moved from `2200000000000000` to `0`, and accounting remained true. A second finalized withdrawal attempt failed with `[EXPECTED] no credit available` and emitted no child. Full transaction evidence is recorded in `deployments/e2e-studionet.json`.
+The prior end-to-end acceptance run on the previous Hub created `noema-4`, attested the official Git tree API baseline and raw LICENSE text, sealed/revealed `note-2`, and resolved `POSITION_A` with only `note-2` decisive and a counterfactual `UNRESOLVED` outcome without it. The researcher withdrew `0.0022 GEN` in one external transfer (accrued across two resolved dossiers on that Hub). Parent `0x117b537038f9faacaf069f1c4d1fbeed5731ab0940b7f132b2469694f58c74c6` emitted finalized child `0xd5e57ca9a0c6fa53ed73901d919a7cf56ba15e612be9b180a9c16a7a2a431cf0`; the child names the researcher wallet, reports `value_credited=true`, and carries exactly `2200000000000000` wei. Wallet balance moved from `10030099999999999997` to `10032299999999999997`, Hub credit moved from `2200000000000000` to `0`, and accounting remained true. A second finalized withdrawal attempt failed with `[EXPECTED] no credit available` and emitted no child. This is historical evidence for the previous deployment, not a claim that the new Hub has already completed the lifecycle.
+
+The current Hub/Witness/Engine were freshly deployed and bound on 2026-10-16, and RPC-returned code hashes match all three source files. The Vercel production deployment `dpl_AK1vXjLn36pqUgN8Sn52yGPSZhFv` is READY and points to the new Hub; health returned chain 61999 and Hub code available at `2026-10-16T08:15:53.049Z`. Live browser checks cover the home, empty production field, real-data autofill form, Method, and Vault. The new Hub is intentionally empty after redeployment. Its funded sponsor-to-withdrawal E2E is pending secure unlock of the sponsor account keystore; do not treat the previous deployment's payout as proof for this fresh state.
 
 The browser E2E inspected the production home, field list, dossier detail, autofill form, method notes, and vault. The real-data autofill was clicked and field values were verified. The browser session had no connected wallet, so the live research and payout were executed with the two funded StudioNet accounts through GenLayerJS rather than claimed as browser-originated transactions.
 
