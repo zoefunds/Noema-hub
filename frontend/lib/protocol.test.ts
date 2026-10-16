@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSuccessfulReceipt, disclosureCommitment, hasEmptyCode, isVerifiedNativeTransfer, upsertPendingPayout } from "./liveProtocol";
+import { assertSuccessfulReceipt, disclosureCommitment, hasEmptyCode, isMatchingFinalizedNativeTransfer, isVerifiedNativeTransfer, upsertPendingPayout } from "./liveProtocol";
 
 describe("disclosure commitment", () => {
   const input = { dossierId: "noema-7", url: "https://example.org/report", claim: "The release shipped.", salt: "ab".repeat(32) };
@@ -38,6 +38,13 @@ describe("native payout acceptance", () => {
     expect(isVerifiedNativeTransfer({ ...child, status_name: "ERROR" }, recipient, 1_100_000_000_000_000n)).toBe(false);
     expect(isVerifiedNativeTransfer({ ...child, to_address: `0x${"8".repeat(40)}` }, recipient, 1_100_000_000_000_000n)).toBe(false);
     expect(isVerifiedNativeTransfer({ ...child, value: 5n }, recipient, 1_100_000_000_000_000n)).toBe(false);
+  });
+  it("recognizes finalized failed transfers for on-chain reconciliation without calling them paid", () => {
+    const failed = { ...child, value_credited: false };
+    expect(isMatchingFinalizedNativeTransfer(failed, recipient, 1_100_000_000_000_000n)).toBe(true);
+    expect(isVerifiedNativeTransfer(failed, recipient, 1_100_000_000_000_000n)).toBe(false);
+    expect(isMatchingFinalizedNativeTransfer({ ...failed, status_name: "ACCEPTED" }, recipient, 1_100_000_000_000_000n)).toBe(false);
+    expect(isMatchingFinalizedNativeTransfer({ ...failed, to_address: `0x${"8".repeat(40)}` }, recipient, 1_100_000_000_000_000n)).toBe(false);
   });
   it("only treats empty-code addresses as externally owned payout recipients", () => {
     expect(hasEmptyCode("0x")).toBe(true);

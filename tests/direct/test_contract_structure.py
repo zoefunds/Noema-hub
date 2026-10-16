@@ -1,4 +1,5 @@
 import ast
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -81,16 +82,16 @@ def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
     assert "native payouts are unavailable on this deployment" in hub
     zero = hub.index("self.credits[account] = u256(0)")
     transfer = hub.index("_EvmRecipient(Address(str(account))).emit_transfer(value=u256(amount), on=\"finalized\")")
-    balance_guard = hub.index("if int(self.balance) < amount:")
+    balance_guard = hub.index("if int(self.balance) < liabilities:")
     assert balance_guard < zero < transfer
-    assert "Hub balance is below the claimable payout" in hub
+    assert "Hub is underfunded; recapitalize before withdrawing" in hub
     assert zero < transfer
     assert "gl.transfer(" not in hub
     assert "@gl.evm.contract_interface" in hub
     assert "_EvmRecipient(Address(str(account))).emit_transfer" in hub
     assert "self.withdrawals[withdrawal_id]" in hub
     assert '"status": "PENDING"' in hub
-    assert '"DELIVERY_REPORTED"' in hub
+    assert '"FAILED_RECREDITED"' in hub and '"DELIVERED"' in hub
     assert "self.pending_outbound[account]) + amount" in hub
     assert "def __on_errored_message__" in hub
     assert 'amount > expected' in hub
@@ -102,8 +103,52 @@ def test_external_payout_failure_is_explicitly_not_claimed_as_recoverable():
     verification = (ROOT / "docs" / "VERIFICATION.md").read_text()
     deployment = (ROOT / "docs" / "DEPLOYMENT.md").read_text()
     assert "EOA transfers are external EVM messages and do not call this hook" in hub
-    assert "It does not simulate an external EOA transfer failure" in verification
-    assert "timeout or user-directed re-credit could double-pay" in deployment
+    assert "reconcile_withdrawal" in verification
+    assert "FAILED_RECREDITED" in deployment
+
+
+def test_payout_reconciliation_requires_exact_parent_child_receipt_linkage():
+    tree = ast.parse(HUB.read_text())
+    names = {"_tx_id", "_tx_value", "_tx_address", "_tx_timestamp", "_realized_payout_loss", "_payout_receipt_outcome"}
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in names]
+    namespace = {"WITHDRAW_CALLDATA": "DgZtZXRob2REd2l0aGRyYXc=", "datetime": datetime, "timezone": timezone}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), "payout_receipt_helpers", "exec"), namespace)
+    recipient, hub = "0x" + "7" * 40, "0x" + "8" * 40
+    parent_id, child_id = "0x" + "1" * 64, "0x" + "2" * 64
+    parent = {"tx_id": parent_id, "status": "FINALIZED", "created_at": "2026-10-16T10:00:00.500000+00:00",
+        "data": {"calldata": "DgZtZXRob2REd2l0aGRyYXc="}, "from_address": recipient,
+        "to_address": hub, "triggered_transactions": [child_id],
+        "messages": [{"recipient": recipient, "value": "0x3", "onAcceptance": False}]}
+    child = {"tx_id": child_id, "status": "FINALIZED", "triggered_by": parent_id,
+        "from_address": hub, "to_address": recipient, "value": "3", "value_credited": True}
+    check = namespace["_payout_receipt_outcome"]
+    args = (parent_id, child_id, hub, recipient, 3, "2026-10-16T10:00:00.500000+00:00")
+    assert check(parent, child, *args) == "DELIVERED"
+    assert check(parent, {**child, "value_credited": False}, *args) == "FAILED"
+    assert check(parent, {**child, "value_credited": None}, *args) == "INVALID"
+    assert check(parent, {**child, "triggered_by": "0x" + "3" * 64}, *args) == "INVALID"
+    assert check(parent, {**child, "value": "0x4"}, *args) == "INVALID"
+    assert check({**parent, "messages": []}, child, *args) == "INVALID"
+    assert check({**parent, "triggered_transactions": []}, child, *args) == "DELIVERED"
+    assert check({**parent, "created_at": "2026-10-15T10:00:00.500000+00:00"}, child, *args) == "INVALID"
+    assert check({**parent, "data": {"calldata": "other-call"}}, child, *args) == "INVALID"
+    assert check(parent, {**child, "status": "ACCEPTED"}, *args) == "PENDING"
+    assert check(parent, child, "0x" + "4" * 64, child_id, hub, recipient, 3, args[-1]) == "INVALID"
+
+
+def test_failed_payout_restoration_accounts_for_actual_backing_loss_only():
+    tree = ast.parse(HUB.read_text())
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_realized_payout_loss")
+    namespace = {}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "payout_loss_helper", "exec"), namespace)
+    realized_loss = namespace["_realized_payout_loss"]
+    amount = 1_100_000_000_000_000
+    # The child failed and the GEN left Hub custody: restored claim is fully under-backed.
+    assert realized_loss(amount, 0, amount, amount, 0) == amount
+    # Runtime failure returned the GEN to the Hub: restore the claim without inventing a loss.
+    assert realized_loss(amount, 0, amount, amount, amount) == 0
+    # Existing shortfall is not charged a second time; only the new deficit delta counts.
+    assert realized_loss(amount, 20, 0, amount + 20, 0) == amount
 
 
 def test_bounds_and_timeout_rollback_are_explicit():

@@ -32,7 +32,7 @@ async function withRpc<T>(work: () => Promise<T>): Promise<T> {
   let wait = 1200;
   for (let attempt = 0; ; attempt += 1) { await reserveRpc(); try { return await work(); } catch (error) {
     const message = String(error instanceof Error ? error.message : error).toLowerCase();
-    if (attempt >= 3 || !/(429|rate limit|too many|fetch failed)/.test(message)) throw error;
+    if (attempt >= 3 || !/(429|502|503|504|rate limit|too many|fetch failed|temporarily unavailable)/.test(message)) throw error;
     await new Promise((resolve) => setTimeout(resolve, wait)); wait *= 2; } }
 }
 function normalize(value: unknown): any {
@@ -54,6 +54,8 @@ export async function listDossiers(offset = 0, limit = 24): Promise<Dossier[]> {
 export async function getDossier(id: string, latest = false): Promise<Dossier> { return read("get_dossier", [id], latest); }
 export async function getStats(): Promise<Record<string, unknown>> { return read("get_stats"); }
 export async function getCredit(address: string, latest = false): Promise<string> { return read("get_credit", [address], latest); }
+export async function getLatestWithdrawal(address: string, latest = false): Promise<any> { return read("get_latest_withdrawal", [address], latest); }
+export async function getWithdrawal(withdrawalId: string, latest = false): Promise<any> { return read("get_withdrawal", [withdrawalId], latest); }
 export async function listSubmissions(id: string, latest = false): Promise<any[]> { return read("list_submissions", [id], latest); }
 export async function findLatestDossier(address: string): Promise<string> { return read("find_latest_dossier_by_sponsor", [address]); }
 export async function getSubmissionForCommitment(commitment: string, latest = false): Promise<string> { return read("get_submission_for_commitment", [commitment], latest); }
@@ -112,39 +114,33 @@ export async function assertExternalEoaRecipient(address: string): Promise<void>
   }
 }
 export function isVerifiedNativeTransfer(child: any, recipient: string, expectedAmount: bigint): boolean {
+  return isMatchingFinalizedNativeTransfer(child, recipient, expectedAmount) && child?.value_credited === true;
+}
+export function isMatchingFinalizedNativeTransfer(child: any, recipient: string, expectedAmount: bigint): boolean {
   const status = String(child?.statusName ?? child?.status_name ?? "").toUpperCase();
   let value: bigint;
   try { value = typeof child?.value === "bigint" ? child.value : BigInt(String(child?.value ?? "0")); }
   catch { return false; }
   const destination = String(child?.to_address ?? child?.recipient ?? "").toLowerCase();
-  return status === "FINALIZED" && child?.value_credited === true
+  return status === "FINALIZED" && typeof child?.value_credited === "boolean"
     && destination === recipient.toLowerCase() && value === expectedAmount;
 }
-export async function waitForNativeTransfer(parentHash: string, recipient: string, expectedAmount: bigint,
-  balanceBefore: bigint): Promise<{ childHash: string; balanceAfter: bigint }> {
+async function rawRpc<T>(method: string, params: unknown[]): Promise<T> {
+  return (readClient() as any).request({ method, params }) as Promise<T>;
+}
+export async function waitForNativeTransfer(parentHash: string, recipient: string, expectedAmount: bigint): Promise<{ childHash: string; child: any }> {
   const client: any = readClient();
-  const childHashes: string[] = await withRpc(() => client.getTriggeredTransactionIds({ hash: parentHash as any }));
-  if (!Array.isArray(childHashes) || childHashes.length === 0) {
-    throw new Error("Withdrawal parent finalized, but no outgoing child transfer was recorded.");
-  }
-  let deliveredChild = "";
-  for (const childHash of childHashes) {
-    let child: any;
-    try { child = await withRpc(() => client.waitForTransactionReceipt({ hash: childHash as any,
-      status: "FINALIZED", retries: 240, interval: 5_000 })); }
-    catch { continue; }
-    if (isVerifiedNativeTransfer(child, recipient, expectedAmount)) {
-      deliveredChild = childHash; break;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const childHashes: string[] = await withRpc(() => client.getTriggeredTransactionIds({ hash: parentHash as any }));
+    for (const childHash of childHashes) {
+      try {
+        const child: any = await withRpc(() => rawRpc("eth_getTransactionByHash", [childHash]));
+        if (isMatchingFinalizedNativeTransfer(child, recipient, expectedAmount)) return { childHash: String(childHash), child };
+      } catch { /* A transient lookup failure leaves the payout pending and retryable. */ }
     }
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
   }
-  if (!deliveredChild) throw new Error("Withdrawal parent finalized, but no child transfer finalized with the expected recipient, amount, and credited flag.");
-  let balanceAfter = await readWalletBalance(recipient);
-  for (let attempt = 0; attempt < 60 && balanceAfter < balanceBefore + expectedAmount; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-    balanceAfter = await readWalletBalance(recipient);
-  }
-  if (balanceAfter < balanceBefore + expectedAmount) throw new Error(`Child transfer ${deliveredChild} finalized, but recipient balance has not increased by the expected amount.`);
-  return { childHash: deliveredChild, balanceAfter };
+  throw new Error("No matching finalized payout child appeared within the verification window; the payout remains pending and can be resumed.");
 }
 export function parseGen(value: string): bigint {
   if (!/^\d+(\.\d{1,18})?$/.test(value.trim())) throw new Error("Enter a valid GEN amount.");

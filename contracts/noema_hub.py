@@ -19,6 +19,8 @@ MAX_DECISIVE_IDS = 12
 MAX_PAGE = 24
 REVEAL_WINDOW = 1200
 STAGE_WINDOW = 1800
+STUDIONET_RPC = "https://studio.genlayer.com/api"
+WITHDRAW_CALLDATA = "DgZtZXRob2REd2l0aGRyYXc="
 
 
 @gl.evm.contract_interface
@@ -70,6 +72,117 @@ def _manifest_root(items):
                        for i in items]))
 
 
+def _tx_id(transaction):
+    return str(transaction.get("tx_id", transaction.get("id", ""))).lower()
+
+
+def _tx_value(value):
+    try:
+        return int(value, 0) if isinstance(value, str) else int(value)
+    except Exception:
+        return -1
+
+
+def _tx_address(value):
+    return str(value).replace("addr#", "0x").replace("address#", "0x").lower()
+
+
+def _tx_timestamp(value):
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except Exception:
+        return -1
+
+
+def _realized_payout_loss(amount, liabilities_before, assets_before, liabilities_after, assets_after):
+    deficit_before = max(0, liabilities_before - assets_before)
+    uncovered_after = max(0, liabilities_after - assets_after)
+    return min(amount, max(0, uncovered_after - deficit_before))
+
+
+def _payout_receipt_outcome(parent, child, parent_id, child_id, hub, recipient, amount, withdrawal_created_at):
+    """Validate a finalized Hub withdrawal and its exact external child record."""
+    if not isinstance(parent, dict) or not isinstance(child, dict):
+        return "INVALID"
+    if _tx_id(parent) != parent_id.lower() or _tx_id(child) != child_id.lower():
+        return "INVALID"
+    if str(parent.get("status", "")).upper() != "FINALIZED" or str(child.get("status", "")).upper() != "FINALIZED":
+        return "PENDING"
+    if _tx_address(parent.get("from_address", parent.get("sender", ""))) != recipient.lower():
+        return "INVALID"
+    if _tx_address(parent.get("to_address", parent.get("recipient", ""))) != hub.lower():
+        return "INVALID"
+    if _tx_timestamp(parent.get("created_at")) != _tx_timestamp(withdrawal_created_at):
+        return "INVALID"
+    calldata = parent.get("data", {}).get("calldata", "") if isinstance(parent.get("data"), dict) else ""
+    if calldata != WITHDRAW_CALLDATA:
+        return "INVALID"
+    # The StudioNet `eth_getTransactionByHash` response keeps
+    # `triggered_transactions` empty for external EVM messages. Linkage is
+    # instead established by the child's `triggered_by` plus this exact parent
+    # message; do not treat the empty convenience field as proof of absence.
+    messages = parent.get("messages", [])
+    if not isinstance(messages, list):
+        return "INVALID"
+    matching_messages = [message for message in messages if isinstance(message, dict)
+        and _tx_address(message.get("recipient", "")) == recipient.lower()
+        and _tx_value(message.get("value")) == amount
+        and message.get("onAcceptance") is False]
+    if len(matching_messages) != 1:
+        return "INVALID"
+    if str(child.get("triggered_by", child.get("triggered_by_hash", ""))).lower() != parent_id.lower():
+        return "INVALID"
+    if _tx_address(child.get("from_address", child.get("sender", ""))) != hub.lower():
+        return "INVALID"
+    if _tx_address(child.get("to_address", child.get("recipient", ""))) != recipient.lower():
+        return "INVALID"
+    if _tx_value(child.get("value")) != amount or type(child.get("value_credited")) is not bool:
+        return "INVALID"
+    return "DELIVERED" if child["value_credited"] else "FAILED"
+
+
+def _fetch_studionet_transaction(txid):
+    response = gl.nondet.web.request(STUDIONET_RPC, method="POST", body={
+        "jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionByHash", "params": [txid]})
+    status = int(getattr(response, "status_code", getattr(response, "status", 0)))
+    if status != 200:
+        raise ValueError("StudioNet transaction lookup failed")
+    body = response.body.decode("utf-8") if isinstance(response.body, bytes) else str(response.body)
+    payload = json.loads(body)
+    if payload.get("error") or not isinstance(payload.get("result"), dict):
+        raise ValueError("StudioNet transaction receipt is unavailable")
+    return payload["result"]
+
+
+def _verify_payout_receipts(parent_id, child_id, hub, recipient, amount, withdrawal_created_at):
+    def leader_fn():
+        try:
+            parent = _fetch_studionet_transaction(parent_id)
+            child = _fetch_studionet_transaction(child_id)
+            outcome = _payout_receipt_outcome(parent, child, parent_id, child_id, hub, recipient, amount,
+                                              withdrawal_created_at)
+            return {"outcome": outcome, "parent_id": parent_id.lower(), "child_id": child_id.lower(),
+                    "recipient": recipient.lower(), "amount": str(amount),
+                    "withdrawal_created_at": withdrawal_created_at}
+        except Exception:
+            return {"outcome": "UNAVAILABLE", "parent_id": parent_id.lower(), "child_id": child_id.lower(),
+                    "recipient": recipient.lower(), "amount": str(amount),
+                    "withdrawal_created_at": withdrawal_created_at}
+
+    def validator_fn(leader_result):
+        if not isinstance(leader_result, gl.vm.Return):
+            return False
+        try:
+            return leader_fn() == leader_result.calldata
+        except Exception:
+            return False
+
+    return gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+
+
 class NoemaHub(gl.Contract):
     dossiers: TreeMap[str, str]
     dossier_ids: DynArray[str]
@@ -78,6 +191,7 @@ class NoemaHub(gl.Contract):
     reservations: TreeMap[str, str]
     credits: TreeMap[Address, u256]
     pending_outbound: TreeMap[Address, u256]
+    latest_withdrawal_id: TreeMap[Address, str]
     withdrawal_nonce: TreeMap[Address, u256]
     withdrawals: TreeMap[str, str]
     native_payouts_enabled: bool
@@ -92,6 +206,9 @@ class NoemaHub(gl.Contract):
     bond_escrow: u256
     claimable: u256
     withdrawn: u256
+    pending_outbound_total: u256
+    payout_loss: u256
+    recovery_surplus: u256
 
     def __init__(self, witness_address: str, engine_address: str, native_payouts_enabled: bool):
         self.bootstrapper = str(gl.message.sender_address)
@@ -106,6 +223,9 @@ class NoemaHub(gl.Contract):
         self.bond_escrow = u256(0)
         self.claimable = u256(0)
         self.withdrawn = u256(0)
+        self.pending_outbound_total = u256(0)
+        self.payout_loss = u256(0)
+        self.recovery_surplus = u256(0)
 
     @gl.public.write
     def configure(self, witness_address: str, engine_address: str) -> None:
@@ -496,14 +616,17 @@ class NoemaHub(gl.Contract):
         if not self.native_payouts_enabled:
             raise gl.vm.UserError("[EXPECTED] native payouts are unavailable on this deployment")
         account = gl.message.sender_address
+        pending = int(self.pending_outbound[account]) if account in self.pending_outbound else 0
+        if pending > 0:
+            raise gl.vm.UserError("[EXPECTED] reconcile the existing withdrawal before starting another")
         if account not in self.credits or int(self.credits[account]) == 0:
             raise gl.vm.UserError("[EXPECTED] no credit available")
         amount = int(self.credits[account])
-        # Fail before touching credits if the ghost cannot fund the external
-        # EVM value message. An EOA cannot reject a native transfer, so balance
-        # coverage is the recoverable precondition for this payout path.
-        if int(self.balance) < amount:
-            raise gl.vm.UserError("[EXPECTED] Hub balance is below the claimable payout")
+        # Preserve full backing for all escrow and claims before emitting the
+        # external EVM message. Failed finalized children are reconciled below.
+        liabilities = int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable)
+        if int(self.balance) < liabilities:
+            raise gl.vm.UserError("[EXPECTED] Hub is underfunded; recapitalize before withdrawing")
         nonce = int(self.withdrawal_nonce[account]) if account in self.withdrawal_nonce else 0
         withdrawal_id = _sha(_json({"recipient": str(account).lower(), "nonce": nonce, "amount": amount}))
         if withdrawal_id in self.withdrawals:
@@ -512,30 +635,81 @@ class NoemaHub(gl.Contract):
         self.claimable = u256(int(self.claimable) - amount)
         self.withdrawn = u256(int(self.withdrawn) + amount)
         self.pending_outbound[account] = u256(int(self.pending_outbound[account]) + amount if account in self.pending_outbound else amount)
+        self.pending_outbound_total = u256(int(self.pending_outbound_total) + amount)
         self.withdrawal_nonce[account] = u256(nonce + 1)
+        self.latest_withdrawal_id[account] = withdrawal_id
         self.withdrawals[withdrawal_id] = _json({"id": withdrawal_id, "recipient": str(account),
-            "amount": str(amount), "status": "PENDING", "created_at": _iso(), "child_tx": ""})
+            "amount": str(amount), "status": "PENDING", "created_at": _iso(), "parent_tx": "", "child_tx": ""})
         # EOA recipients are chain-layer accounts. Use the EVM external-message
         # interface documented for EOA transfers, not an IC-to-IC message.
         _EvmRecipient(Address(str(account))).emit_transfer(value=u256(amount), on="finalized")
 
     @gl.public.write
-    def record_withdrawal_delivery(self, withdrawal_id: str, child_tx: str) -> None:
-        """Permissionless delivery acknowledgement after child finalization.
+    def reconcile_withdrawal(self, withdrawal_id: str, parent_tx: str, child_tx: str) -> None:
+        """Consensus-replay the finalized StudioNet parent/child receipt pair.
 
-        Callers must supply a child hash; the current contract cannot verify an
-        external receipt itself, so this method only records an auditable claim
-        and never enables a second payout. Reconciliation is separate.
+        A credited child settles the withdrawal. A finalized child with
+        value_credited=false restores the claim, records the real payout loss,
+        and blocks another withdrawal until the Hub is recapitalized.
         """
         if withdrawal_id not in self.withdrawals:
             raise gl.vm.UserError("[EXPECTED] withdrawal not found")
         item = json.loads(self.withdrawals[withdrawal_id])
         if item["status"] != "PENDING" or not child_tx:
             raise gl.vm.UserError("[EXPECTED] withdrawal is not pending")
-        item["status"] = "DELIVERY_REPORTED"
-        item["child_tx"] = _text(child_tx, "child transaction", 128)
-        item["reported_at"] = _iso()
+        parent_tx = _text(parent_tx, "parent transaction", 66)
+        child_tx = _text(child_tx, "child transaction", 66)
+        if re.fullmatch(r"0x[0-9a-fA-F]{64}", parent_tx) is None or re.fullmatch(r"0x[0-9a-fA-F]{64}", child_tx) is None:
+            raise gl.vm.UserError("[EXPECTED] invalid payout transaction hash")
+        outcome = _verify_payout_receipts(parent_tx, child_tx, str(gl.message.contract_address),
+                                          item["recipient"], int(item["amount"]), item["created_at"])
+        if not isinstance(outcome, dict) or outcome.get("outcome") == "UNAVAILABLE":
+            raise gl.vm.UserError("[EXPECTED] finalized payout receipt is unavailable; retry reconciliation")
+        if outcome.get("parent_id") != parent_tx.lower() or outcome.get("child_id") != child_tx.lower():
+            raise gl.vm.UserError("[EXPECTED] payout receipt identity mismatch")
+        if outcome.get("outcome") == "PENDING":
+            raise gl.vm.UserError("[EXPECTED] payout child is not finalized")
+        if outcome.get("outcome") not in ("DELIVERED", "FAILED"):
+            raise gl.vm.UserError("[EXPECTED] payout receipts do not match this withdrawal")
+        account = Address(item["recipient"])
+        amount = int(item["amount"])
+        pending = int(self.pending_outbound[account]) if account in self.pending_outbound else 0
+        if pending < amount or int(self.pending_outbound_total) < amount:
+            raise gl.vm.UserError("[EXPECTED] pending withdrawal accounting mismatch")
+        liabilities_before = int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable)
+        assets_before = int(self.balance) + int(self.pending_outbound_total)
+        self.pending_outbound[account] = u256(pending - amount)
+        self.pending_outbound_total = u256(int(self.pending_outbound_total) - amount)
+        if outcome["outcome"] == "DELIVERED":
+            item["status"] = "DELIVERED"
+        else:
+            self.withdrawn = u256(int(self.withdrawn) - amount)
+            self._credit(account, amount)
+            liabilities_after = int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable)
+            assets_after = int(self.balance) + int(self.pending_outbound_total)
+            realized_loss = _realized_payout_loss(amount, liabilities_before, assets_before,
+                                                  liabilities_after, assets_after)
+            self.payout_loss = u256(int(self.payout_loss) + realized_loss)
+            item["status"] = "FAILED_RECREDITED"
+            item["credit_restored"] = True
+            item["realized_loss_atto"] = str(realized_loss)
+        item["parent_tx"] = parent_tx.lower()
+        item["child_tx"] = child_tx.lower()
+        item["reconciled_at"] = _iso()
+        item["receipt_outcome"] = outcome["outcome"]
         self.withdrawals[withdrawal_id] = _json(item)
+
+    @gl.public.write.payable
+    def recapitalize_payouts(self) -> None:
+        amount = int(gl.message.value)
+        if amount <= 0:
+            raise gl.vm.UserError("[EXPECTED] recapitalization requires positive GEN")
+        required_before = (int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable)
+            + int(self.withdrawn) + int(self.payout_loss) + int(self.recovery_surplus))
+        shortfall = max(0, required_before - int(self.deposited))
+        surplus = max(0, amount - shortfall)
+        self.deposited = u256(int(self.deposited) + amount)
+        self.recovery_surplus = u256(int(self.recovery_surplus) + surplus)
 
     @gl.public.view
     def get_withdrawal(self, withdrawal_id: str) -> dict:
@@ -548,6 +722,12 @@ class NoemaHub(gl.Contract):
         address = Address(_address(account, "account"))
         return str(int(self.pending_outbound[address]) if address in self.pending_outbound else 0)
 
+    @gl.public.view
+    def get_latest_withdrawal(self, account: str) -> dict:
+        address = Address(_address(account, "account"))
+        withdrawal_id = self.latest_withdrawal_id[address] if address in self.latest_withdrawal_id else ""
+        return json.loads(self.withdrawals[withdrawal_id]) if withdrawal_id else {}
+
     @gl.public.write.payable
     def __on_errored_message__(self) -> None:
         # EOA transfers are external EVM messages and do not call this hook.
@@ -559,6 +739,7 @@ class NoemaHub(gl.Contract):
         if amount == 0 or amount > expected:
             raise gl.vm.UserError("[EXPECTED] unknown failed outbound transfer")
         self.pending_outbound[account] = u256(expected - amount)
+        self.pending_outbound_total = u256(int(self.pending_outbound_total) - amount)
         self.withdrawn = u256(int(self.withdrawn) - amount)
         self._credit(account, amount)
 
@@ -601,9 +782,17 @@ class NoemaHub(gl.Contract):
 
     @gl.public.view
     def get_stats(self) -> dict:
+        liabilities = int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable)
+        accounting_right = liabilities + int(self.withdrawn) + int(self.payout_loss) + int(self.recovery_surplus)
+        available = int(self.balance) + int(self.pending_outbound_total)
         return {"product": "Noema", "version": VERSION, "chain_id": CHAIN_ID,
             "dossiers": str(len(self.dossier_ids)), "max_evidence_per_dossier": str(MAX_EVIDENCE),
             "max_lifetime_submissions": str(MAX_LIFETIME_SUBMISSIONS),
             "max_decisive_ids": str(MAX_DECISIVE_IDS),
             "native_payouts_enabled": self.native_payouts_enabled,
-            "accounting_ok": int(self.deposited) == int(self.reward_escrow) + int(self.bond_escrow) + int(self.claimable) + int(self.withdrawn)}
+            "payout_loss": str(int(self.payout_loss)),
+            "recovery_surplus": str(int(self.recovery_surplus)),
+            "pending_outbound": str(int(self.pending_outbound_total)),
+            "payout_recovery_required": str(max(0, liabilities - available)),
+            "solvent_ok": available >= liabilities,
+            "accounting_ok": int(self.deposited) == accounting_right}
