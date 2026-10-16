@@ -6,6 +6,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+async function retryTransient(label, operation, attempts = 5) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await operation(); } catch (error) {
+      const message = String(error instanceof Error ? error.message : error).toLowerCase();
+      const temporary = /(fetch failed|econnreset|etimedout|unexpected token|not valid json|429|502|503|504|rate limit|temporarily unavailable|aborted|timeout)/.test(message);
+      if (!temporary || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1_000 * 2 ** attempt, 10_000)));
+      if (attempt === attempts - 1) console.warn(`${label} is still retrying after a transient StudioNet RPC failure.`);
+    }
+  }
+}
 const generatedBundles = [
   "00_cleanup.compiled.js",
   "deployNoema.compiled.js",
@@ -31,7 +42,7 @@ if (ephemeralKey) {
   ]);
   const account = createAccount(ephemeralKey);
   const client = createClient({ chain: studionet, endpoint: "https://studio.genlayer.com/api", account });
-  const balance = await client.getBalance({ address: account.address });
+  const balance = await retryTransient("deployer balance preflight", () => client.getBalance({ address: account.address }));
   if (balance < 5_000_000_000_000_000n) {
     throw new Error(`Ephemeral signer ${account.address} has insufficient GEN for deployment and the funded E2E (balance ${balance} atto).`);
   }
