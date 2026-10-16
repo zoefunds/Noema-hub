@@ -44,3 +44,11 @@ export type PendingDisclosure = {
   commitment: string;
   createdAt: string;
 };
+
+export type PendingPayout = {
+  account: string;
+  parentHash: string;
+  amount: string;
+  walletBefore: string;
+  createdAt: string;
+};

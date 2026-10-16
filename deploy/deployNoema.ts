@@ -34,8 +34,9 @@ export default async function main(client: GenLayerClient<any>) {
     return JSON.parse(readFileSync(manifestPath, "utf8"));
   }
 
-  // StudioNet currently rejects contract-originated value messages to EOAs.
-  // Preserve credits and reject withdrawal at contract level on this release.
+  // EOA delivery is an external EVM value message and is opt-in at deployment.
+  // The release pipeline explicitly enables it only after balance, receipt,
+  // and wallet-delta verification on Studionet.
   const enableNativePayouts = process.env.NOEMA_ENABLE_NATIVE_PAYOUTS === "1";
   const hub = await deploy(client, "contracts/noema_hub.py", ["", "", enableNativePayouts]);
   const witness = await deploy(client, "contracts/source_witness.py", [hub.address]);

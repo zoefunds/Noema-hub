@@ -499,6 +499,11 @@ class NoemaHub(gl.Contract):
         if account not in self.credits or int(self.credits[account]) == 0:
             raise gl.vm.UserError("[EXPECTED] no credit available")
         amount = int(self.credits[account])
+        # Fail before touching credits if the ghost cannot fund the external
+        # EVM value message. An EOA cannot reject a native transfer, so balance
+        # coverage is the recoverable precondition for this payout path.
+        if int(self.balance) < amount:
+            raise gl.vm.UserError("[EXPECTED] Hub balance is below the claimable payout")
         nonce = int(self.withdrawal_nonce[account]) if account in self.withdrawal_nonce else 0
         withdrawal_id = _sha(_json({"recipient": str(account).lower(), "nonce": nonce, "amount": amount}))
         if withdrawal_id in self.withdrawals:

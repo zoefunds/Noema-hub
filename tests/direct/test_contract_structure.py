@@ -68,6 +68,9 @@ def test_native_withdrawal_is_checks_effects_interactions_and_message_based():
     assert "native payouts are unavailable on this deployment" in hub
     zero = hub.index("self.credits[account] = u256(0)")
     transfer = hub.index("_EvmRecipient(Address(str(account))).emit_transfer(value=u256(amount), on=\"finalized\")")
+    balance_guard = hub.index("if int(self.balance) < amount:")
+    assert balance_guard < zero < transfer
+    assert "Hub balance is below the claimable payout" in hub
     assert zero < transfer
     assert "gl.transfer(" not in hub
     assert "@gl.evm.contract_interface" in hub
