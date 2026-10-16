@@ -13,12 +13,12 @@ export function NewDossierForm() {
   const [seeds,setSeeds]=useState<Seed[]>([{url:"",claim:""}]); const [reward,setReward]=useState(""); const [days,setDays]=useState("7");
   const [busy,setBusy]=useState(false); const [notice,setNotice]=useState("");
   function loadVerifiedExample(){
-    setTitle("OpenAI Codex repository license");
-    setQuestion("As of 16 October 2026, does the official openai/codex repository's default branch declare the Apache License 2.0?");
+    setTitle("OpenAI Codex default-branch license declaration");
+    setQuestion("Does the official openai/codex default-branch root LICENSE file expressly declare Apache License 2.0?");
     setA("Apache-2.0 declared"); setB("Apache-2.0 not declared");
-    setRule("Choose Position A only when the official LICENSE file served from the openai/codex main branch explicitly declares Apache License Version 2.0. Choose Position B only when that official LICENSE file explicitly declares a different license or explicitly states that no license applies. If the official evidence does not establish either condition, leave the dossier unresolved.");
-    setPolicy("Accept only files served by raw.githubusercontent.com from the official openai/codex repository's main branch. Exclude mirrors, forks, reposts, social media, search snippets, and third-party summaries.");
-    setSeeds([{url:"https://raw.githubusercontent.com/openai/codex/main/README.md",claim:"The official openai/codex README identifies Codex CLI as a coding agent from OpenAI that runs locally on a user's computer."}]);
+    setRule("Choose Position A only when the root LICENSE file served from the official openai/codex default branch explicitly names Apache License Version 2.0. Choose Position B only when that official file explicitly names another license or explicitly states that no license applies. If the official document does not establish either condition, leave the dossier unresolved.");
+    setPolicy("Accept only the official openai/codex default-branch tree metadata from api.github.com and document text from raw.githubusercontent.com/openai/codex/main. Exclude forks, mirrors, reposts, social media, search snippets, and third-party summaries.");
+    setSeeds([{url:"https://api.github.com/repos/openai/codex/git/trees/main",claim:"The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text."}]);
     setReward("0.001"); setDays("1"); setNotice("Verified public-source example loaded. Review it, connect a funded Studionet wallet, then open the dossier.");
   }
   function seed(index:number,key:keyof Seed,value:string){setSeeds((items)=>items.map((item,i)=>i===index?{...item,[key]:value}:item));}

@@ -1,5 +1,5 @@
 const rows = [
-  ["Source identity", "Requested host, publisher identity and document-declared canonical URL", "Witness consensus"],
+  ["Source identity", "Requested URL and host; response origin stays explicitly unverified when transport data is unavailable", "Witness consensus"],
   ["Source content", "SHA-256 of the fetched response body and HTTP status", "Witness consensus"],
   ["Claim validity", "Six independent admissibility and support fields", "Witness consensus"],
   ["Closure record", "Manifest root, outcome, decisive IDs and basis digest", "Verdict consensus"],

@@ -2,50 +2,51 @@
   "product": "Noema",
   "network": "studionet",
   "chainId": 61999,
-  "sourceCommit": "1b9308b6f3effa80f00d31a6b61df8eb97373164",
+  "sourceCommit": "fddf4669778d68388a1544ffa74cacd147850341",
   "nativePayoutsEnabled": true,
   "rpc": "https://studio.genlayer.com/api",
   "explorer": "https://explorer-studio.genlayer.com",
-  "deployedAt": "2026-10-16T06:37:05.289Z",
+  "deployedAt": "2026-10-16T07:22:33.994058Z",
   "contracts": {
     "hub": {
-      "address": "0x6592007a9e33CbFD99A62e0979a71149CF6684B4",
-      "txHash": "0x8c36b3fa54bb20d27b0a3b78b14143a5d0650a6182ea273e497b56cb86c9fd1d"
+      "address": "0xfFf9A84A6256DCF2A971674E3bd21956b4072f12",
+      "txHash": "0x911153644f8a09d69771592ed57db0143dec7c75169f43242763a0d5d2505900"
     },
     "witness": {
-      "address": "0x6d04F2a47B6a2EE5128a87A839127Fdcf0E15b28",
-      "txHash": "0xb3adc6f25a719c22045068c4af8b748ecf7a0803dfff7979942fe231929967b3"
+      "address": "0x83c9c59Ebf368C01468d7E8eD257ae04111bA9c5",
+      "txHash": "0x4aa283d83a1426a2e5d96bdc9e7413daaeb287af29e5a8cb042fb13073d379d2"
     },
     "engine": {
-      "address": "0x16262D365832F73Fdc4095e4942872166fdF39E0",
-      "txHash": "0x03069d4bfccf5c97c15cbd1d6d34a2dc59deaa16e77da3862e058d2355bbce0b"
+      "address": "0x2E9eD1d764Bfda225443AC70Bb3EE613Fd97Ba30",
+      "txHash": "0xf150f120e0093813e1a710051cbb4f6cf83911e9bfa96e9e3e7c0d88d72c2243"
     },
-    "configureTxHash": "0x987e8bcb6d3d76aa494d2c6b1317d8d75f8915789404bd66ab0353b68bfbe934"
+    "configureTxHash": "0x5a0261d2e89c8f80b9b8f793ef33f4cb9fe90b8c1facc49e50ca9d3ce56bbd5a"
   },
   "deployedSourceVerification": {
     "method": "GenLayerJS getContractCode over https://studio.genlayer.com/api",
-    "verifiedAt": "2026-10-16T07:04:54Z",
+    "verifiedAt": "2026-10-16T07:26:48Z",
     "allLocalSourcesMatchDeployedCode": true,
     "contracts": {
       "hub": {
-        "address": "0x6592007a9e33CbFD99A62e0979a71149CF6684B4",
-        "sha256": "3168ae48b390b6e9a8ed64f4bb420b2dd80251febdd0e39119656220f110afec"
+        "address": "0xfFf9A84A6256DCF2A971674E3bd21956b4072f12",
+        "sha256": "4020e8edfedf1ec763d7576f3687b9832a9e2b3cff5f19aaae0a79b92d863d80"
       },
       "witness": {
-        "address": "0x6d04F2a47B6a2EE5128a87A839127Fdcf0E15b28",
+        "address": "0x83c9c59Ebf368C01468d7E8eD257ae04111bA9c5",
         "sha256": "0f4ef7d4cc9b7b73ac98bed4d207b1240a1f0854f775e30b874e8e520b376a33"
       },
       "engine": {
-        "address": "0x16262D365832F73Fdc4095e4942872166fdF39E0",
+        "address": "0x2E9eD1d764Bfda225443AC70Bb3EE613Fd97Ba30",
         "sha256": "7085da39128709f465d30b3fce9988b21fecff9b17d2edc624305e5a625ce026"
       }
     }
   },
-  "acceptance": {
-    "dossierId": "noema-1",
-    "withdrawalParent": "0x0770d17f04c2a805aef970769808f1f32e4cffeaa09c4866256bd4d2eb31121c",
-    "withdrawalChild": "0xf3b35e84c583474418c87a793c0214fedf09a0e315654447b1f7ef9eacab27d2",
-    "childFinalized": true,
-    "valueCredited": true
+  "deploymentVerification": {
+    "hubFinalizedAt": "2026-10-16T07:22:33.994058Z",
+    "witnessFinalizedAt": "2026-10-16T07:23:54.324279Z",
+    "engineFinalizedAt": "2026-10-16T07:24:31.400827Z",
+    "configureFinalizedAt": "2026-10-16T07:25:37.758325Z",
+    "nativePayoutsEnabled": true,
+    "hubBalancePreflight": true
   }
 }

@@ -27,6 +27,12 @@ function loadManifest(): any { return JSON.parse(readFileSync(path.resolve(proce
 function loadRun(): any { return existsSync(E2E_PATH) ? JSON.parse(readFileSync(E2E_PATH, "utf8")) : {}; }
 function saveRun(run: any): void { writeFileSync(E2E_PATH, JSON.stringify(run, null, 2) + "\n"); }
 
+function assertSameAddress(actual: unknown, expected: string, label: string): void {
+  if (String(actual ?? "").toLowerCase() !== expected.toLowerCase()) {
+    throw new Error(`${label} mismatch: expected ${expected}, received ${String(actual ?? "")}`);
+  }
+}
+
 async function write(client: GenLayerClient<any>, hub: `0x${string}`, functionName: string, args: unknown[], value = 0n): Promise<string> {
   const hash = await client.writeContract({ address: hub, functionName, args: args as any[], value });
   const receipt: any = await client.waitForTransactionReceipt({ hash: hash as TransactionHash,
@@ -66,21 +72,24 @@ export default async function main(client: GenLayerClient<any>) {
   const run = loadRun();
 
   if (phase === "sponsor") {
-    const baselineUrl = "https://raw.githubusercontent.com/openai/codex/main/README.md";
-    const baselineClaim = "The official openai/codex README identifies Codex CLI as a coding agent from OpenAI that runs locally on a user's computer.";
+    if (run.refreshedDeploymentRun && run.refreshedDeploymentRun.verified !== true) {
+      throw new Error(`An incomplete sponsor phase already exists for ${run.refreshedDeploymentRun.dossierId}; reconcile it before creating another dossier`);
+    }
+    const baselineUrl = "https://api.github.com/repos/openai/codex/git/trees/main";
+    const baselineClaim = "The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text.";
     const closesAt = BigInt(Math.floor(Date.now() / 1000) + 6 * 60 * 60);
     const txHash = await write(client, hub, "open_dossier", [
-      "OpenAI Codex repository license",
-      "As of 16 October 2026, does the official openai/codex repository's default branch declare the Apache License 2.0?",
-      "Choose Position A only when the official LICENSE file served from the openai/codex main branch explicitly declares Apache License Version 2.0. Choose Position B only when that official LICENSE file explicitly declares a different license or explicitly states that no license applies. If the official evidence does not establish either condition, leave the dossier unresolved.",
+      "OpenAI Codex default-branch license declaration",
+      "Does the official openai/codex default-branch root LICENSE file expressly declare Apache License 2.0?",
+      "Choose Position A only when the root LICENSE file served from the official openai/codex default branch explicitly names Apache License Version 2.0. Choose Position B only when that official file explicitly names another license or explicitly states that no license applies. If the official document does not establish either condition, leave the dossier unresolved.",
       "Apache-2.0 declared",
       "Apache-2.0 not declared",
-      "Accept only files served by raw.githubusercontent.com from the official openai/codex repository's main branch. Exclude mirrors, forks, reposts, social media, search snippets, and third-party summaries.",
+      "Accept only the official openai/codex default-branch tree metadata from api.github.com and document text from raw.githubusercontent.com/openai/codex/main. Exclude forks, mirrors, reposts, social media, search snippets, and third-party summaries.",
       JSON.stringify([{ url: baselineUrl, claim: baselineClaim }]),
       closesAt,
     ], 1_000_000_000_000_000n);
     const dossierId = await read(client, hub, "find_latest_dossier_by_sponsor", [SPONSOR]);
-    const started = { product: "Noema", network: "studionet", startedAt: new Date().toISOString(), sponsor: SPONSOR,
+    const started = { ...run, product: "Noema", network: "studionet", startedAt: new Date().toISOString(), sponsor: SPONSOR,
       researcher: RESEARCHER, dossierId, sponsorTxHash: txHash, baseline: { url: baselineUrl, claim: baselineClaim } };
     saveRun(started);
     const dossier = await waitFor(client, hub, dossierId, (value) => value.status === "OPEN" || value.status === "CLOSED_REFUNDED", "baseline adjudication");
@@ -91,8 +100,11 @@ export default async function main(client: GenLayerClient<any>) {
 
   if (phase === "research") {
     if (!run.dossierId) throw new Error("Run the sponsor phase first");
+    assertSameAddress(await read(client, hub, "find_latest_dossier_by_sponsor", [SPONSOR]), run.dossierId, "Latest sponsor dossier");
+    const initialDossier = await read(client, hub, "get_dossier", [run.dossierId]);
+    if (initialDossier.status !== "OPEN") throw new Error(`Research phase requires an OPEN dossier, received ${initialDossier.status}`);
     const url = "https://raw.githubusercontent.com/openai/codex/main/LICENSE";
-    const claim = "The official LICENSE file on the openai/codex main branch explicitly declares Apache License Version 2.0, January 2004, and contains its terms and conditions for use, reproduction, and distribution.";
+    const claim = "The root LICENSE file begins with Apache License Version 2.0, January 2004, and states the Apache License's terms, so it explicitly declares Apache License 2.0.";
     const salt = randomBytes(32).toString("hex");
     const packet = { domain: "NOEMA_DISCLOSURE_V1", chain_id: "61999", hub: hub.toLowerCase(), dossier_id: run.dossierId,
       researcher: RESEARCHER.toLowerCase(), url, claim, salt };
@@ -102,7 +114,12 @@ export default async function main(client: GenLayerClient<any>) {
     const sealedSubmissionId = await read(client, hub, "get_submission_for_commitment", [commitment]);
     if (!sealedSubmissionId) throw new Error("Seal receipt finalized but authoritative commitment lookup returned no submission");
     const submissionId = sealedSubmissionId;
+    Object.assign(run, { researchPhase: { startedAt: new Date().toISOString(), url, claim, commitment, salt,
+      sealTxHash, submissionId, sealedAt: new Date().toISOString() } });
+    saveRun(run);
     const discloseTxHash = await write(client, hub, "disclose", [submissionId, url, claim, salt]);
+    Object.assign(run.researchPhase, { discloseTxHash, disclosedAt: new Date().toISOString() });
+    saveRun(run);
     const resolved = await waitFor(client, hub, run.dossierId,
       (value) => ["RESOLVED", "CLOSED_REFUNDED"].includes(value.status), "candidate witnessing and final verdict");
     const submission = await read(client, hub, "get_submission", [submissionId]);
@@ -119,6 +136,8 @@ export default async function main(client: GenLayerClient<any>) {
       decisiveIds: resolved.decisive_ids, researcherCredit, accountingOk: stats.accounting_ok };
   }
   if (phase === "withdraw") {
+    const latest = await read(client, hub, "find_latest_dossier_by_sponsor", [SPONSOR]);
+    if (run.dossierId) assertSameAddress(latest, run.dossierId, "Latest sponsor dossier");
     const creditBefore = await read(client, hub, "get_credit", [RESEARCHER]);
     if (BigInt(creditBefore) === 0n) throw new Error("No researcher credit is available for withdrawal proof");
     const walletBefore = await client.getBalance({ address: RESEARCHER as `0x${string}` });

@@ -28,7 +28,7 @@ export default function Home() {
       <div className="section-heading inverse"><span className="section-no">02</span><div><p>The method</p><h2>Every economic decision leaves a proof trail.</h2></div></div>
       <div className="method-grid">
         <article><span>α</span><h3>Seal the lead</h3><p>A private commitment reserves a source and claim before either becomes visible.</p></article>
-        <article><span>β</span><h3>Witness the source</h3><p>Validators fetch independently and bind the publisher, content digest, canonical location, time and six validity checks.</p></article>
+        <article><span>β</span><h3>Witness the source</h3><p>Validators fetch independently and bind the requested URL, response digest, HTTP status and six validity checks. Redirect origin is not claimed when the runtime cannot prove it.</p></article>
         <article><span>γ</span><h3>Resolve the dossier</h3><p>A separate engine compares the exact evidence manifest, decisive IDs and closure basis before settlement.</p></article>
       </div>
       <Link href="/method" className="method-link">Read the protocol field notes <span>↗</span></Link>
