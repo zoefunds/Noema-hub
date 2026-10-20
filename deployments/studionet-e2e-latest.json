@@ -2,13 +2,13 @@
   "network": "StudioNet",
   "chainId": 61999,
   "runStatus": "COMPLETE",
-  "startedAt": "2026-10-20T14:45:39.865Z",
-  "finishedAt": "2026-10-20T14:59:52.091Z",
-  "sourceCommit": "588ae6f2e25c1afcd2b80115cb57f00990b04e44",
+  "startedAt": "2026-10-20T15:27:14.544Z",
+  "finishedAt": "2026-10-20T15:46:48.113Z",
+  "sourceCommit": "aea785e7460e61e4739bd0fa2621af56b9d9c612",
   "contracts": {
-    "hub": "0x2abC9A485924F7fB43C31875ff6bc865a1827633",
-    "witness": "0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C",
-    "engine": "0xf4917237F5e4e6b990BD6B982B53b8d04f244439"
+    "hub": "0x8bEd4aB285B33CAefFEc06Fa175B797b58f531A5",
+    "witness": "0x97F7625A26C9419FA4e6cb2ec44bf7f740BA643c",
+    "engine": "0xFB07B39bbBa8410ca2df209D09632654e66C89ec"
   },
   "testQuestion": {
     "dossierId": "noema-1",
@@ -18,8 +18,8 @@
     "decisiveEvidenceIds": ["note-1"],
     "counterfactualWithoutDecisiveEvidence": "UNRESOLVED",
     "rulesVersion": "NOEMA_SPONSOR_RULES_V1",
-    "rulesRoot": "df394367db26b0679e0264119ae19ee7fdc0e251993ade4d8f8cd74f698184df",
-    "manifestRoot": "2296e3032f17dd20345a721179603d11d0b9aa3d57dfcbccfc59e693276ef27f",
+    "rulesRoot": "0fb227e6ea0e9acf6fd01411df467621cacdd7a5fe96314a61eef9cedf3c23dc",
+    "manifestRoot": "1dd2c430496e9bd5b99ca4b41b34a0f927af12b5c20e1d9d2edfe7d5dff5133e",
     "baseline": {
       "url": "https://api.github.com/repos/openai/codex/git/trees/b8be7cdf257c4f6aaf4250060a5b37d5c045ab5d",
       "httpStatus": 200,
@@ -40,25 +40,25 @@
     }
   },
   "transactions": {
-    "sponsorFunding": "0x94ba50c1ec4afdb4d90163338ad54f2b5084229b4c7406f9ea1bfc10d8f061d6",
-    "openDossier": "0x9872db46199da0e2fbedb3549100e404fe75f52dc92717e5c97a71e6ecdc25d5",
-    "sealCommitment": "0x2213b59d32098b53c09c779c3203e702d971b08375ca9213e69804c7e02b3373",
-    "reveal": "0x097492dd4f547e2b7ac811a91b1d76a8284bfbc41181aee49ed1435e1d36b011",
-    "withdrawalParent": "0x960e79ee4f3d8a94ab027c225f63a7f8a811533fd38ac63601ef12c568ff66b1",
-    "creditedChild": "0x5fe23177c3f83609c8f8921979a26a41ff4dd3b846f1feb6f6cffb79d0e27fc8",
-    "reconciliation": "0xf3f5207418601c216e9356c68a95e7fbb3265786133fb2fb3fcedb0e41476c1f",
-    "temporarySponsorSweep": "0x8a44b0ee35cee35ce52c58b95eaa74967c7e6d61e401a839876693bfa3139117"
+    "sponsorFunding": "0x1a3715086cceba772e08a39079aa4034571ff1d53f741eba255ea84554c866b8",
+    "openDossier": "0xb5e3ea3142c926a9f6b35c8dbb5996a0ac8de11cb37dae2a6580591930efecb3",
+    "sealCommitment": "0x06ef3ed97f0c339d93b7596866459248a3837a564a0157249684c2aea8e2a481",
+    "reveal": "0x0d76d14dc4192e0a2b7af5e19388fd8b4177da9d5f5826c822e5d7ec2a01ca54",
+    "withdrawalParent": "0x0aa20b30de1ee715cfb510b610ce1e7006f9b7a44a6abb7920f0f070738e6550",
+    "creditedChild": "0x68f5b61a30dc46d14d61bf6f6bcbbbc49bfebb94288a7fe9379c27263495ad4f",
+    "reconciliation": "0x6c953a16ec5769e95025eeab1f8b35c07cb61708a38e89748f5adbb549a5aa06",
+    "temporarySponsorSweep": "0x0f8d821c3229d3f8648398e7807de90ddd5f12b420e4972c780719bdc0994fc9"
   },
   "payout": {
-    "recipient": "0x7452084E1Cf767bf19C743051cFf27D9F7A87a4D",
+    "recipient": "0x1c2e587043568239B2fcaeC5f96F278EB134b7f5",
     "amountAttoGen": "1100000000000000",
     "receiptStatus": "FINALIZED",
     "valueCredited": true,
     "reconciliationStatus": "DELIVERED",
     "hubCreditBeforeAttoGen": "1100000000000000",
     "hubCreditAfterAttoGen": "0",
-    "researcherBalanceBeforeAttoGen": "10020999999999999997",
-    "researcherBalanceAfterAttoGen": "10022099999999999997",
+    "researcherBalanceBeforeAttoGen": "459599999967045000",
+    "researcherBalanceAfterAttoGen": "460699999967045000",
     "duplicateWithdrawalRejected": true,
     "accountingInvariant": true,
     "solvencyInvariant": true

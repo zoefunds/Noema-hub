@@ -131,15 +131,17 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 
 ## Verified Studionet release
 
-- Hub: `0x2abC9A485924F7fB43C31875ff6bc865a1827633`
-- SourceWitness: `0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C`
-- VerdictEngine: `0xf4917237F5e4e6b990BD6B982B53b8d04f244439`
-- source-matched release commit: `588ae6f2e25c1afcd2b80115cb57f00990b04e44`; exact deployed/local SHA-256 equality was independently read back for all three contracts
+- Hub: `0x8bEd4aB285B33CAefFEc06Fa175B797b58f531A5`
+- SourceWitness: `0x97F7625A26C9419FA4e6cb2ec44bf7f740BA643c`
+- VerdictEngine: `0xFB07B39bbBa8410ca2df209D09632654e66C89ec`
+- source-matched release commit: `aea785e7460e61e4739bd0fa2621af56b9d9c612`; exact deployed/local SHA-256 equality was independently read back for all three contracts
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
-- production frontend: [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_7cY56FXJ5UQeHrcP8zE94BfbZzy2`
+- production frontend: [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_DiprwumfRqdx5ANy7DW64fkGLANn`
 
-Native withdrawals use the EVM recipient interface and external finalized value messages. The Hub—not the Vercel gateway—fetches canonical StudioNet parent and child receipts under validator replay and verifies finality, linkage, sender, recipient, exact amount, calldata, timestamp, `value_credited`, and single-use receipt consumption before delivery or one-time recredit. The completed CLI/GenLayerJS StudioNet proof is recorded in `deployments/studionet-e2e-latest.json`. The production browser-wallet record proves a separate funded `open_dossier` transaction, asynchronous Hub→Witness→Hub execution, fail-closed HTTP 403 rejection, and full rollback to sponsor Hub credit; it does not claim a browser-originated payout.
+Native withdrawals use the EVM recipient interface and external finalized value messages. The Hub—not the Vercel gateway—fetches canonical StudioNet parent and child receipts under validator replay and verifies finality, linkage, sender, recipient, exact amount, calldata, timestamp, `value_credited`, and single-use receipt consumption before delivery or one-time recredit. The completed CLI/GenLayerJS StudioNet proof is recorded in `deployments/studionet-e2e-latest.json`. Executable tests now run conflicting-evidence consensus, economically non-decisive Hub settlement, real candidate-timeout rollback, and stateful failed-receipt replay/duplicate-credit rejection. `deployments/studionet-timeout-rollback.json` records the real asynchronous StudioNet timeout lifecycle.
+
+The timeout lifecycle funded `noema-2`, recorded its emitted SourceWitness child, waited through the actual 1,800-second StudioNet deadline, and finalized `expire_stage` as `0x0498f234793d69aa30db3d09a7f71d3014ee585fa4a9a314b0e39f5f73b7c6aa`. Readback proved `BASELINE_STAGE_TIMEOUT`, zero remaining reward escrow, exact `0.001 GEN` sponsor-credit restoration, and healthy accounting.
 
 The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The deployment source hashes and transaction IDs are in `deployments/studionet.json`; `deployments/e2e-studionet.json` is a verbose runner log and may include historical attempts. Use the concise release record for current acceptance claims.

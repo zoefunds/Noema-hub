@@ -18,3 +18,9 @@ export function sweepableSponsorBalance(currentBalance: bigint, openingBalance: 
   if (!ephemeralKey) return currentBalance;
   return currentBalance > openingBalance ? currentBalance - openingBalance : 0n;
 }
+
+// `genlayer deploy` evaluates every TypeScript module in this directory.
+// This module is a shared helper, so its deployment entry point is a no-op.
+export default async function main() {
+  return { skipped: true, module: "sponsorKey helper" };
+}
