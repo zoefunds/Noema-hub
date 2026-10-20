@@ -38,7 +38,7 @@ The timeout artifact [`deployments/studionet-timeout-rollback.json`](../deployme
 
 ## Browser-wallet status
 
-The current production site is [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_DpyU9D9GUUrGifdvdp2ciN3hcbQz`, configured for the current Hub. A browser-wallet account successfully opened current-Hub dossier `noema-2` in finalized transaction `0xcbff89cf95f8886ef66b8c3365e03abef0e7da8c8c07ff3afb1877d0cd3c8bf9`.
+The current production site is [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_EFmyYfwdwc4Nszw9U1U7m2PUg8qy`, configured for the current Hub. A browser-wallet account successfully opened current-Hub dossier `noema-2` in finalized transaction `0xcbff89cf95f8886ef66b8c3365e03abef0e7da8c8c07ff3afb1877d0cd3c8bf9`. A later browser audit caught a stale pending seal request before signing; it was canceled, and the actual `neoma-hub` project configuration was corrected and redeployed.
 
 That browser-originated dossier is still `OPEN`. A current-release browser seal, reveal, witness, verdict, reward, withdrawal, and reconciliation sequence has **not** been claimed or recorded. Completing it requires the wallet holder's just-in-time confirmation for the real bond and withdrawal transactions.
 
