@@ -8,7 +8,7 @@ import { connectWallet, disclosureCommitment, HUB_ADDRESS, randomSalt, savePendi
 export function DisclosureForm({ dossier }: { dossier: Dossier }) {
   const [url, setUrl] = useState(""); const [claim, setClaim] = useState(""); const [notice, setNotice] = useState("");
   function loadVerifiedEvidence() {
-    setUrl("https://raw.githubusercontent.com/openai/codex/main/LICENSE");
+    setUrl("https://raw.githubusercontent.com/openai/codex/e1b9c9457ceca75a99b034a5df39ac48c3998d15/LICENSE");
     setClaim("The official LICENSE file on the openai/codex main branch explicitly declares Apache License Version 2.0, January 2004, and contains its terms and conditions for use, reproduction, and distribution.");
     setNotice("First-party public evidence loaded. Use it only when it directly answers this dossier's question.");
   }

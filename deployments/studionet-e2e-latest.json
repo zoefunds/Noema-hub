@@ -2,13 +2,13 @@
   "network": "StudioNet",
   "chainId": 61999,
   "runStatus": "COMPLETE",
-  "startedAt": "2026-10-16T11:53:26.426Z",
-  "finishedAt": "2026-10-16T12:08:51.666Z",
-  "sourceCommit": "623407424e30e5b31daf842c82f3031ae34f8227",
+  "startedAt": "2026-10-20T14:45:39.865Z",
+  "finishedAt": "2026-10-20T14:59:52.091Z",
+  "sourceCommit": "WORKTREE-2026-10-20-v4",
   "contracts": {
-    "hub": "0x52282B21156C22d1800d0302Ea1e0FFc4De637BF",
-    "witness": "0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7",
-    "engine": "0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745"
+    "hub": "0x2abC9A485924F7fB43C31875ff6bc865a1827633",
+    "witness": "0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C",
+    "engine": "0xf4917237F5e4e6b990BD6B982B53b8d04f244439"
   },
   "testQuestion": {
     "dossierId": "noema-1",
@@ -17,45 +17,57 @@
     "decision": "POSITION_A",
     "decisiveEvidenceIds": ["note-1"],
     "counterfactualWithoutDecisiveEvidence": "UNRESOLVED",
-    "manifestRoot": "98d5ee42a07d403772477c9f4477f81e0df648ef68ba748ef76f76e6c01ceeb6",
+    "rulesVersion": "NOEMA_SPONSOR_RULES_V1",
+    "rulesRoot": "df394367db26b0679e0264119ae19ee7fdc0e251993ade4d8f8cd74f698184df",
+    "manifestRoot": "2296e3032f17dd20345a721179603d11d0b9aa3d57dfcbccfc59e693276ef27f",
     "baseline": {
-      "url": "https://api.github.com/repos/openai/codex/git/trees/main",
+      "url": "https://api.github.com/repos/openai/codex/git/trees/b8be7cdf257c4f6aaf4250060a5b37d5c045ab5d",
       "httpStatus": 200,
-      "contentSha256": "71d883efa8d69e4f94099f7aebbcea35f098f603ca2567502878493887427497"
+      "provenanceStatus": "VERIFIED_CONTENT_ADDRESSED_ORIGIN",
+      "sourceSize": 9508,
+      "contentSha256": "8b5c5e45ef85336331f27ca970ae611386237bac81d1fbc6a10ac998df64f75e",
+      "supportSha256": "9d7438a34f075e6c8cb498d4817d6580105c73cb5c0fbc89da05eea9ad1b4b14"
     },
     "decisiveSource": {
-      "url": "https://raw.githubusercontent.com/openai/codex/main/LICENSE",
+      "url": "https://raw.githubusercontent.com/openai/codex/e1b9c9457ceca75a99b034a5df39ac48c3998d15/LICENSE",
       "httpStatus": 200,
-      "claim": "The root LICENSE file begins with Apache License Version 2.0, January 2004, and states the Apache License's terms, so it explicitly declares Apache License 2.0.",
-      "contentSha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+      "provenanceStatus": "VERIFIED_CONTENT_ADDRESSED_ORIGIN",
+      "claim": "The root LICENSE file contains the exact statement: Licensed under the Apache License, Version 2.0 (the \"License\");",
+      "supportQuote": "Licensed under the Apache License, Version 2.0 (the \"License\");",
+      "sourceSize": 10926,
+      "contentSha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+      "supportSha256": "55f12528ddd4240e797f6391c80f5cf883e9c281253ad296c30b97dd4810c0a6"
     }
   },
   "transactions": {
-    "sponsorFunding": "0xc8fdf195264919e64404895b8597ae719c4d46fdcfa8a1c54878a84ea35188ab",
-    "openDossier": "0x08918cdf05c07eb8afb588517d88d9523a14cef68c4ab42aaa730b0d9ea30158",
-    "sealCommitment": "0x4c78cf9747969dd0add21924df553d38bfdbfeb8de2b418b50165b0d13d14bac",
-    "reveal": "0x53630d5c9944e4ea0793e89bf10cf1edbb934e1e008dba988e66f4599e1f9c83",
-    "withdrawalParent": "0x05274e66eb4093cb16e48b1a7b8f3080bf92ff185a689ca91b67300456739120",
-    "creditedChild": "0xc97a20a6510b2597b37545acecc77f4e8de9334c54faa77cc07727f5f2be2661",
-    "reconciliation": "0x610f43f82eb842592891fa3554d2ff73f728d705de3bd3eb1e3ae2705ea5a829",
-    "temporarySponsorSweep": "0x1ea738131b926836cae4057432a038fdc83447cac1dc10feb42bfd71f67b497f"
+    "sponsorFunding": "0x94ba50c1ec4afdb4d90163338ad54f2b5084229b4c7406f9ea1bfc10d8f061d6",
+    "openDossier": "0x9872db46199da0e2fbedb3549100e404fe75f52dc92717e5c97a71e6ecdc25d5",
+    "sealCommitment": "0x2213b59d32098b53c09c779c3203e702d971b08375ca9213e69804c7e02b3373",
+    "reveal": "0x097492dd4f547e2b7ac811a91b1d76a8284bfbc41181aee49ed1435e1d36b011",
+    "withdrawalParent": "0x960e79ee4f3d8a94ab027c225f63a7f8a811533fd38ac63601ef12c568ff66b1",
+    "creditedChild": "0x5fe23177c3f83609c8f8921979a26a41ff4dd3b846f1feb6f6cffb79d0e27fc8",
+    "reconciliation": "0xf3f5207418601c216e9356c68a95e7fbb3265786133fb2fb3fcedb0e41476c1f",
+    "temporarySponsorSweep": "0x8a44b0ee35cee35ce52c58b95eaa74967c7e6d61e401a839876693bfa3139117"
   },
   "payout": {
+    "recipient": "0x7452084E1Cf767bf19C743051cFf27D9F7A87a4D",
     "amountAttoGen": "1100000000000000",
     "receiptStatus": "FINALIZED",
     "valueCredited": true,
     "reconciliationStatus": "DELIVERED",
     "hubCreditBeforeAttoGen": "1100000000000000",
     "hubCreditAfterAttoGen": "0",
-    "researcherBalanceBeforeAttoGen": "999000000999876277587324887999999998992",
-    "researcherBalanceAfterAttoGen": "999000000999876277587325987999999998992",
+    "researcherBalanceBeforeAttoGen": "10020999999999999997",
+    "researcherBalanceAfterAttoGen": "10022099999999999997",
     "duplicateWithdrawalRejected": true,
     "accountingInvariant": true,
     "solvencyInvariant": true
   },
   "temporarySponsorSweep": {
     "amountAttoGen": "2000000000000000",
-    "receiptStatus": "0x1"
+    "receiptStatus": "0x1",
+    "remainingBalanceAttoGen": "0",
+    "keyFileRemoved": true
   },
-  "provenanceCaveat": "Requested URLs and response-body digests are recorded. GenVM does not prove the final HTTP response origin, so verified response origin and canonical URL are intentionally not asserted."
+  "provenance": "Both decisive sources were authenticated as immutable, content-addressed official GitHub objects. The decisive claim is bound to an exact verbatim support quote, its digest, the complete 10,926-byte response digest, and the verified response origin. Publisher and canonical-URL fields remain empty because the transport did not independently authenticate those claims."
 }

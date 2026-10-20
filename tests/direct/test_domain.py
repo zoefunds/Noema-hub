@@ -145,7 +145,7 @@ def test_source_witness_never_semantically_attests_error_response_body(status, e
             return leader()
 
     def fake_web_get(_url):
-        return SimpleNamespace(status=status, body=body)
+        return SimpleNamespace(status=status, body=body, url="https://example.org/license", redirected=False)
 
     def fake_exec_prompt(*_args, **_kwargs):
         calls.append("semantic-evaluation")
@@ -160,12 +160,14 @@ def test_source_witness_never_semantically_attests_error_response_body(status, e
         "gl": fake_gl,
         "hashlib": hashlib,
         "json": json,
-        "MAX_FETCH": 24_000,
+        "MAX_SOURCE_BYTES": 120_000,
         "FIELDS": ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
                    "materially_new", "internally_consistent"),
         "_json": lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
         "_normalize": lambda value: {**value, "status": "ATTESTED"},
         "_classify_http_status": classify_http_status,
+        "_response_provenance": lambda _response, _url: ("https://example.org", True, [], "VERIFIED_DIRECT_RESPONSE"),
+        "_response_status": lambda response: response.status,
     }
     exec(compile(ast.Module(body=[function], type_ignores=[]), "source_witness_inspect", "exec"), namespace)
     result = namespace["_inspect"]("question", "rule", "policy", "[]", "https://example.org/license", "claim")
@@ -184,7 +186,7 @@ def test_source_witness_runs_semantics_for_a_successful_document_response():
     source = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
     tree = ast.parse(source)
     function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_inspect")
-    body = b"Apache License Version 2.0"
+    body = (b"x" * 25_000) + b"Apache License Version 2.0"
     calls = []
     fields = ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
               "materially_new", "internally_consistent")
@@ -199,18 +201,23 @@ def test_source_witness_runs_semantics_for_a_successful_document_response():
 
     def fake_exec_prompt(*_args, **_kwargs):
         calls.append("semantic-evaluation")
-        return {field: True for field in fields} | {"basis": "The source states Apache License Version 2.0."}
+        return {field: True for field in fields} | {"support_quote": "Apache License Version 2.0",
+                                                     "basis": "The source states Apache License Version 2.0."}
 
     fake_gl = SimpleNamespace(
-        nondet=SimpleNamespace(web=SimpleNamespace(get=lambda _url: SimpleNamespace(status=200, body=body)),
+        nondet=SimpleNamespace(web=SimpleNamespace(get=lambda _url: SimpleNamespace(
+            status=200, body=body, url="https://example.org/license", redirected=False)),
                                exec_prompt=fake_exec_prompt),
         vm=FakeVm,
     )
     namespace = {
-        "gl": fake_gl, "hashlib": hashlib, "json": json, "MAX_FETCH": 24_000, "FIELDS": fields,
+        "gl": fake_gl, "hashlib": hashlib, "json": json, "MAX_SOURCE_BYTES": 120_000, "FIELDS": fields,
         "_json": lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
         "_normalize": lambda value: {**value, "status": "ATTESTED"},
         "_classify_http_status": classify_http_status,
+        "_response_provenance": lambda _response, _url: ("https://example.org", True, [], "VERIFIED_DIRECT_RESPONSE"),
+        "_response_status": lambda response: response.status,
+        "_sha": lambda value: hashlib.sha256(value.encode()).hexdigest(),
     }
     exec(compile(ast.Module(body=[function], type_ignores=[]), "source_witness_inspect", "exec"), namespace)
     result = namespace["_inspect"]("question", "rule", "policy", "[]", "https://example.org/license", "claim")
@@ -218,7 +225,49 @@ def test_source_witness_runs_semantics_for_a_successful_document_response():
     assert result["status"] == "ATTESTED"
     assert result["http_status"] == 200
     assert result["content_digest"] == hashlib.sha256(body).hexdigest()
+    assert result["support_digest"] == hashlib.sha256(b"Apache License Version 2.0").hexdigest()
     assert calls == ["semantic-evaluation"]
+
+
+def test_source_witness_rejects_oversized_sources_instead_of_partially_inspecting_them():
+    witness = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
+    assert "[:MAX_FETCH]" not in witness
+    assert "if len(raw_body) > MAX_SOURCE_BYTES" in witness
+    assert "partial inspection is forbidden" in witness
+
+
+def test_source_witness_fails_closed_when_origin_or_redirect_cannot_be_authenticated():
+    witness = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
+    assert '"UNVERIFIED_RESPONSE_ORIGIN"' in witness
+    assert '"UNSAFE_REDIRECT"' in witness
+    assert "if not origin_verified" in witness
+    assert '"status": "REJECTED"' in witness
+
+
+def test_response_provenance_accepts_only_an_exact_direct_https_origin():
+    from types import SimpleNamespace
+    from urllib.parse import urlsplit, urlunsplit
+
+    source = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
+    tree = ast.parse(source)
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                 and node.name in ("_requested_provenance", "_response_provenance")]
+    class UserError(Exception):
+        pass
+    namespace = {"urlsplit": urlsplit, "urlunsplit": urlunsplit, "re": __import__("re"),
+                 "gl": type("Gl", (), {"vm": type("Vm", (), {"UserError": UserError})})}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), "source_provenance", "exec"), namespace)
+    check = namespace["_response_provenance"]
+    direct = SimpleNamespace(url="https://records.example/report", redirected=False, history=[])
+    assert check(direct, "https://records.example/report") == (
+        "https://records.example", True, [], "VERIFIED_DIRECT_RESPONSE")
+    assert check(SimpleNamespace(url="", redirected=False), "https://records.example/report")[3] == "UNVERIFIED_RESPONSE_ORIGIN"
+    assert check(SimpleNamespace(url="https://evil.example/report", redirected=True, history=[]),
+                 "https://records.example/report")[3] == "UNSAFE_REDIRECT"
+    immutable = "https://raw.githubusercontent.com/openai/codex/e1b9c9457ceca75a99b034a5df39ac48c3998d15/LICENSE"
+    assert check(SimpleNamespace(url=""), immutable) == (
+        "https://raw.githubusercontent.com", True, [], "VERIFIED_CONTENT_ADDRESSED_ORIGIN")
+    assert check(SimpleNamespace(url=""), "https://raw.githubusercontent.com/openai/codex/main/LICENSE")[3] == "UNVERIFIED_RESPONSE_ORIGIN"
 
 
 def classify_http_status(status):

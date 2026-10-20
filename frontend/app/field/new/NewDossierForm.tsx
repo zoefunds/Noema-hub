@@ -17,8 +17,8 @@ export function NewDossierForm() {
     setQuestion("Does the official openai/codex default-branch root LICENSE file expressly declare Apache License 2.0?");
     setA("Apache-2.0 declared"); setB("Apache-2.0 not declared");
     setRule("Choose Position A only when the root LICENSE file served from the official openai/codex default branch explicitly names Apache License Version 2.0. Choose Position B only when that official file explicitly names another license or explicitly states that no license applies. If the official document does not establish either condition, leave the dossier unresolved.");
-    setPolicy("Accept only the official openai/codex default-branch tree metadata from api.github.com and document text from raw.githubusercontent.com/openai/codex/main. Exclude forks, mirrors, reposts, social media, search snippets, and third-party summaries.");
-    setSeeds([{url:"https://api.github.com/repos/openai/codex/git/trees/main",claim:"The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text."}]);
+    setPolicy("Accept only immutable official openai/codex objects: Git tree b8be7cdf257c4f6aaf4250060a5b37d5c045ab5d and commit e1b9c9457ceca75a99b034a5df39ac48c3998d15. Exclude mutable branches, forks, mirrors, reposts, social media, search snippets, and third-party summaries.");
+    setSeeds([{url:"https://api.github.com/repos/openai/codex/git/trees/b8be7cdf257c4f6aaf4250060a5b37d5c045ab5d",claim:"The immutable official openai/codex Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text."}]);
     setReward("0.001"); setDays("1"); setNotice("Verified public-source example loaded. Review it, connect a funded Studionet wallet, then open the dossier.");
   }
   function seed(index:number,key:keyof Seed,value:string){setSeeds((items)=>items.map((item,i)=>i===index?{...item,[key]:value}:item));}

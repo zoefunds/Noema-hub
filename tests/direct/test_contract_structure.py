@@ -178,13 +178,32 @@ def test_failed_payout_restoration_accounts_for_actual_backing_loss_only():
     assert realized_loss(amount, 20, 0, amount + 20, 0) == amount
 
 
-def test_payout_receipt_fetch_uses_fixed_hash_only_read_gateway():
+def test_payout_receipt_fetch_uses_canonical_rpc_not_project_gateway():
     hub = HUB.read_text()
-    assert 'PAYOUT_RECEIPT_API = "https://neoma-hub.vercel.app/api/payout-receipt?hash="' in hub
-    assert "gl.nondet.web.get(PAYOUT_RECEIPT_API + txid)" in hub
+    assert 'STUDIONET_RPC = "https://studio.genlayer.com/api"' in hub
+    assert 'gl.nondet.web.post(STUDIONET_RPC, body=payload' in hub
+    assert 'headers={"content-type": "application/json"}' in hub
+    assert '"method": "eth_getTransactionByHash", "params": [txid]' in hub
+    assert "neoma-hub.vercel.app/api/payout-receipt" not in hub
     assert 're.fullmatch(r"0x[0-9a-fA-F]{64}", str(txid))' in hub
     assert "_tx_id(transaction) != txid.lower()" in hub
-    assert 'method="POST"' not in hub
+    assert 'payload.get("error")' in hub
+
+
+def test_frozen_rules_fifo_and_source_bound_settlement_are_executable_invariants():
+    hub = HUB.read_text()
+    engine = ENGINE.read_text()
+    witness = WITNESS.read_text()
+    assert '"rules_version": "NOEMA_SPONSOR_RULES_V1"' in hub
+    assert 'result.get("rules_root") != dossier["rules_root"]' in hub
+    assert 'dossier["queue"][0] != submission["id"]' in hub
+    assert '"queue_position": dossier["next_queue_position"]' in hub
+    assert '"support_digest": i["support_digest"]' in hub and '"support_digest": i["support_digest"]' in engine
+    assert "never claim text alone" in engine
+    assert "If authenticated sources conflict" in engine
+    assert "quote not in body" in witness
+    assert "VERIFIED_CONTENT_ADDRESSED_ORIGIN" in witness
+    assert "VERIFIED_CONTENT_ADDRESSED_ORIGIN" in hub
 
 
 def test_live_e2e_requires_authoritative_payout_reconciliation():
@@ -194,6 +213,16 @@ def test_live_e2e_requires_authoritative_payout_reconciliation():
     assert 'reconciledWithdrawal.status !== "DELIVERED"' in e2e
     assert 'reconciledWithdrawal.parent_tx.toLowerCase()' in e2e
     assert 'reconciledWithdrawal.child_tx.toLowerCase()' in e2e
+
+
+def test_payout_receipts_are_single_use_and_duplicate_credit_is_closed():
+    hub = HUB.read_text()
+    assert "consumed_payout_receipts: TreeMap[str, str]" in hub
+    assert "if receipt_key in self.consumed_payout_receipts" in hub
+    assert 'self.consumed_payout_receipts[receipt_key] = withdrawal_id' in hub
+    assert 'if item["status"] != "PENDING"' in hub
+    failed_branch = hub[hub.index('if outcome["outcome"] == "DELIVERED"'):hub.index('item["parent_tx"] = parent_tx.lower()')]
+    assert failed_branch.count("self._credit(account, amount)") == 1
 
 
 def test_bounds_and_timeout_rollback_are_explicit():

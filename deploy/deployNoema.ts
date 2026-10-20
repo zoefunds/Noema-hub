@@ -81,6 +81,7 @@ export default async function main(client: GenLayerClient<any>) {
     `NEXT_PUBLIC_NOEMA_HUB_ADDRESS=${hub.address}`,
     `NEXT_PUBLIC_NOEMA_WITNESS_ADDRESS=${witness.address}`,
     `NEXT_PUBLIC_NOEMA_ENGINE_ADDRESS=${engine.address}`,
+    `NEXT_PUBLIC_NATIVE_PAYOUTS_ENABLED=${enableNativePayouts ? "true" : "false"}`,
     "",
   ].join("\n"));
   return manifest;

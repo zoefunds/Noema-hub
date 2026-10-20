@@ -31,13 +31,14 @@ Only one disclosed note per dossier is adjudicated at a time. FIFO ordering make
 
 ## Provenance packet
 
-The witness fetches the requested HTTPS resource with `gl.nondet.web.get`. It hashes the complete response body, while only a bounded prefix is supplied for semantic extraction. Validators replay both the fetch and prompt, then compare:
+The witness fetches the requested HTTPS resource with `gl.nondet.web.get`. It hashes and semantically inspects the complete response body. Sources above the all-content bound are rejected rather than partially inspected. Validators replay both the fetch and prompt, then compare:
 
 - status;
 - HTTP status;
 - content digest;
 - normalized requested origin and host;
 - verified response origin only when provided by the transport runtime;
+- an exact verbatim support passage and its digest;
 - same subject;
 - policy compliance;
 - direct claim support;
@@ -45,11 +46,11 @@ The witness fetches the requested HTTPS resource with `gl.nondet.web.get`. It ha
 - material novelty;
 - internal consistency.
 
-Explanatory witness prose is retained for inspection but cannot alter settlement without the compared fields.
+The contract deterministically rejects an attestation if its support passage is absent from the fetched bytes. Missing response-origin metadata and any observed redirect fail closed for ordinary sources. A narrowly allowlisted immutable GitHub API/raw object may instead authenticate through exact repository and content-addressed object identity; the resulting packet is explicitly labeled `VERIFIED_CONTENT_ADDRESSED_ORIGIN`. Explanatory prose cannot alter settlement without the compared fields.
 
 ## Verdict packet
 
-The Hub appends a fully attested candidate, recomputes the ordered manifest root, and calls the engine. The engine evaluates both the full manifest and a counterfactual manifest with that candidate removed. Settlement requires a resolved full verdict, an unresolved counterfactual verdict, and the current candidate in the unique decisive set. Both the Hub and engine enforce the 12-ID limit.
+The Hub freezes sponsor terms at creation into `rules_root`, appends a fully attested candidate, recomputes the ordered manifest root, and calls the engine. The engine reasons from authenticated support passages rather than claim text and returns unresolved on material source conflict. It evaluates both the full manifest and a counterfactual manifest with that candidate removed. Settlement requires a resolved full verdict, an unresolved counterfactual verdict, and the FIFO-current candidate in the unique decisive set.
 
 Each validator compares outcome, sufficiency, the ordered decisive set, and the digest of its closure basis for both decisions. The engine also returns both manifest roots and the counterfactual outcome. The Hub rejects a callback for another root or a candidate-independent result.
 

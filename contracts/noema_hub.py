@@ -19,7 +19,7 @@ MAX_DECISIVE_IDS = 12
 MAX_PAGE = 24
 REVEAL_WINDOW = 1200
 STAGE_WINDOW = 1800
-PAYOUT_RECEIPT_API = "https://neoma-hub.vercel.app/api/payout-receipt?hash="
+STUDIONET_RPC = "https://studio.genlayer.com/api"
 WITHDRAW_CALLDATA = "DgZtZXRob2REd2l0aGRyYXc="
 
 
@@ -66,10 +66,11 @@ def _commitment(hub, dossier_id, researcher, url, claim, salt):
         "url": url, "claim": claim, "salt": salt}))
 
 
-def _manifest_root(items):
-    return _sha(_json([{"id": i["id"], "claim_digest": i["claim_digest"],
-                        "content_digest": i["content_digest"], "source_host": i["source_host"]}
-                       for i in items]))
+def _manifest_root(items, rules_root):
+    return _sha(_json({"rules_root": rules_root, "evidence": [
+        {"id": i["id"], "claim_digest": i["claim_digest"],
+         "content_digest": i["content_digest"], "support_digest": i["support_digest"],
+         "verified_response_origin": i["verified_response_origin"]} for i in items]}))
 
 
 def _tx_id(transaction):
@@ -157,20 +158,21 @@ def _payout_receipt_outcome(parent, child, parent_id, child_id, hub, recipient, 
 
 
 def _fetch_studionet_transaction(txid):
-    """Read one fixed-hash receipt through the app's read-only StudioNet gateway.
-
-    GenVM validators still perform this GET independently in consensus. The
-    gateway only adapts the public StudioNet RPC POST response to a bounded,
-    fixed-method HTTP GET; it has no write operation or wallet credentials.
-    """
+    """Read a fixed transaction hash directly from the canonical StudioNet RPC."""
     if re.fullmatch(r"0x[0-9a-fA-F]{64}", str(txid)) is None:
         raise ValueError("Invalid StudioNet transaction identifier")
-    response = gl.nondet.web.get(PAYOUT_RECEIPT_API + txid)
-    status = int(getattr(response, "status", 0))
+    payload = json.dumps({"jsonrpc": "2.0", "id": 1,
+                          "method": "eth_getTransactionByHash", "params": [txid]})
+    response = gl.nondet.web.post(STUDIONET_RPC, body=payload,
+                                  headers={"content-type": "application/json"})
+    status = int(getattr(response, "status_code", getattr(response, "status", 0)))
     if status != 200:
         raise ValueError("StudioNet transaction lookup failed")
     body = response.body.decode("utf-8") if isinstance(response.body, bytes) else str(response.body)
-    transaction = json.loads(body)
+    payload = json.loads(body)
+    if not isinstance(payload, dict) or payload.get("error") or not isinstance(payload.get("result"), dict):
+        raise ValueError("StudioNet transaction receipt is unavailable")
+    transaction = payload["result"]
     if not isinstance(transaction, dict) or _tx_id(transaction) != txid.lower():
         raise ValueError("StudioNet transaction receipt identity mismatch")
     return transaction
@@ -213,6 +215,7 @@ class NoemaHub(gl.Contract):
     latest_withdrawal_id: TreeMap[Address, str]
     withdrawal_nonce: TreeMap[Address, u256]
     withdrawals: TreeMap[str, str]
+    consumed_payout_receipts: TreeMap[str, str]
     native_payouts_enabled: bool
     witness_address: str
     engine_address: str
@@ -331,7 +334,19 @@ class NoemaHub(gl.Contract):
         engine = gl.get_contract_at(Address(self.engine_address))
         engine.emit(on="finalized").resolve(request_id, str(gl.message.contract_address),
             dossier["question"], dossier["decision_rule"], dossier["position_a"],
-            dossier["position_b"], _json(dossier["evidence"]), candidate_id)
+            dossier["position_b"], dossier["rules_root"], _json(dossier["evidence"]), candidate_id)
+
+    def _attestation_valid(self, result, url, claim):
+        return (isinstance(result, dict) and result.get("status") == "ATTESTED"
+            and result.get("claim_digest") == _sha(claim.strip())
+            and isinstance(result.get("requested_url"), str) and result.get("requested_url").startswith("https://")
+            and result.get("transport_origin_verified") is True
+            and result.get("provenance_status") in ("VERIFIED_DIRECT_RESPONSE", "VERIFIED_CONTENT_ADDRESSED_ORIGIN")
+            and isinstance(result.get("verified_response_origin"), str)
+            and bool(result.get("verified_response_origin"))
+            and re.fullmatch(r"[0-9a-f]{64}", str(result.get("content_digest", ""))) is not None
+            and re.fullmatch(r"[0-9a-f]{64}", str(result.get("support_digest", ""))) is not None
+            and isinstance(result.get("support_quote"), str) and bool(result.get("support_quote")))
 
     @gl.public.write.payable
     def open_dossier(self, title: str, question: str, decision_rule: str, position_a: str,
@@ -367,11 +382,16 @@ class NoemaHub(gl.Contract):
         dossier = {"id": dossier_id, "title": title, "question": question,
             "decision_rule": decision_rule, "position_a": position_a, "position_b": position_b,
             "source_policy": source_policy, "sponsor": str(gl.message.sender_address),
+            "rules_version": "NOEMA_SPONSOR_RULES_V1",
+            "rules_root": _sha(_json({"version": "NOEMA_SPONSOR_RULES_V1", "title": title,
+                "question": question, "decision_rule": decision_rule, "position_a": position_a,
+                "position_b": position_b, "source_policy": source_policy,
+                "baseline": seeds, "closes_at": str(int(closes_at)), "reward_atto": str(reward)})),
             "status": "BASELINE_WITNESSING", "reward_atto": str(reward),
             "bond_atto": str(max(MIN_BOND, reward // 100)), "created_at": _iso(),
             "closes_at": str(int(closes_at)), "baseline_queue": seeds, "baseline_cursor": 0,
             "evidence": [], "manifest_root": "", "submission_ids": [], "active_ids": [],
-            "queue": [], "pending_id": "", "stage_deadline": "", "winner": "",
+            "queue": [], "next_queue_position": 1, "pending_id": "", "stage_deadline": "", "winner": "",
             "resolution": "", "decisive_ids": [], "closure_basis": "", "closed_at": ""}
         self._save_dossier(dossier)
         self.dossier_ids.append(dossier_id)
@@ -391,11 +411,11 @@ class NoemaHub(gl.Contract):
             dossier = self._dossier(dossier_id)
             if dossier["status"] != "BASELINE_WITNESSING" or dossier["pending_id"] != request_id:
                 raise gl.vm.UserError("[EXPECTED] stale baseline callback")
-            if result.get("status") != "ATTESTED":
-                self._close_refund(dossier, "INVALID_OR_UNAVAILABLE_BASELINE")
-                return
             cursor = int(cursor_text)
             seed = dossier["baseline_queue"][cursor]
+            if not self._attestation_valid(result, seed["url"], seed["claim"]):
+                self._close_refund(dossier, "INVALID_OR_UNAVAILABLE_BASELINE")
+                return
             dossier["evidence"].append(self._evidence_record(seed["id"], seed["url"], seed["claim"], result, "BASELINE"))
             cursor += 1
             dossier["baseline_cursor"] = cursor
@@ -405,13 +425,15 @@ class NoemaHub(gl.Contract):
                 self._request_witness(dossier, f"baseline:{dossier_id}:{cursor}", seed["url"], seed["claim"])
             else:
                 dossier["status"] = "BASELINE_DECISION"
-                dossier["manifest_root"] = _manifest_root(dossier["evidence"])
+                dossier["manifest_root"] = _manifest_root(dossier["evidence"], dossier["rules_root"])
                 self._request_verdict(dossier, f"baseline-verdict:{dossier_id}")
             return
         submission = self._submission(request_id)
         dossier = self._dossier(submission["dossier_id"])
         if submission["status"] != "WITNESS_PENDING" or dossier["pending_id"] != request_id:
             raise gl.vm.UserError("[EXPECTED] stale attestation callback")
+        if not dossier["queue"] or dossier["queue"][0] != submission["id"]:
+            raise gl.vm.UserError("[EXPECTED] FIFO attestation order violation")
         submission["attestation"] = result
         if dossier["status"] != "OPEN" or _now() >= int(dossier["closes_at"]):
             submission["status"] = "STALE"
@@ -421,7 +443,7 @@ class NoemaHub(gl.Contract):
             submission["status"] = "RETRYABLE"
             self._release_bond(submission, submission["researcher"])
             self._finish_submission(dossier, submission)
-        elif result.get("status") != "ATTESTED":
+        elif not self._attestation_valid(result, submission["url"], submission["claim"]):
             submission["status"] = "REJECTED"
             self._release_bond(submission, dossier["sponsor"])
             self._finish_submission(dossier, submission)
@@ -430,7 +452,7 @@ class NoemaHub(gl.Contract):
             candidate = self._evidence_record(submission["id"], submission["url"], submission["claim"], result, "RESEARCH")
             submission["candidate_record"] = candidate
             dossier["evidence"].append(candidate)
-            dossier["manifest_root"] = _manifest_root(dossier["evidence"])
+            dossier["manifest_root"] = _manifest_root(dossier["evidence"], dossier["rules_root"])
             self._save_submission(submission)
             self._request_verdict(dossier, submission["id"], submission["id"])
 
@@ -440,10 +462,14 @@ class NoemaHub(gl.Contract):
             "source_host": result.get("requested_host", ""),
             "verified_response_origin": result.get("verified_response_origin", ""),
             "transport_origin_verified": bool(result.get("transport_origin_verified", False)),
+            "provenance_status": result.get("provenance_status", ""),
             "canonical_url": result.get("document_canonical_url", ""),
             "publisher": result.get("document_publisher", ""),
             "published_at": result.get("published_at", ""), "claim": claim,
             "claim_digest": result["claim_digest"], "content_digest": result["content_digest"],
+            "support_quote": result.get("support_quote", ""),
+            "support_digest": result.get("support_digest", ""),
+            "source_size": result.get("source_size", 0),
             "observed_at": result["observed_at"], "http_status": result.get("http_status", 0)}
 
     @gl.public.write
@@ -469,6 +495,10 @@ class NoemaHub(gl.Contract):
         dossier = self._dossier(submission["dossier_id"])
         if submission["status"] != "VERDICT_PENDING" or dossier["pending_id"] != request_id:
             raise gl.vm.UserError("[EXPECTED] stale verdict callback")
+        if not dossier["queue"] or dossier["queue"][0] != submission["id"]:
+            raise gl.vm.UserError("[EXPECTED] FIFO verdict order violation")
+        if result.get("rules_root") != dossier["rules_root"]:
+            raise gl.vm.UserError("[EXPECTED] frozen sponsor rules mismatch")
         if result.get("manifest_root") != dossier["manifest_root"]:
             raise gl.vm.UserError("[EXPECTED] verdict manifest root mismatch")
         decisive_ids = result.get("decisive_ids")
@@ -585,7 +615,9 @@ class NoemaHub(gl.Contract):
             raise gl.vm.UserError("[EXPECTED] evidence packet already reserved")
         self.reservations[reservation] = submission_id
         submission.update({"url": url, "claim": claim, "claim_digest": _sha(claim),
-                           "status": "QUEUED", "revealed_at": _iso(), "reservation": reservation})
+                           "status": "QUEUED", "revealed_at": _iso(), "reservation": reservation,
+                           "queue_position": dossier["next_queue_position"]})
+        dossier["next_queue_position"] += 1
         dossier["queue"].append(submission_id)
         self._save_submission(submission)
         self._save_dossier(dossier)
@@ -618,7 +650,7 @@ class NoemaHub(gl.Contract):
             # Judgment receives a tentatively appended candidate. Roll it back
             # before continuing so an inconclusive stage never changes history.
             dossier["evidence"] = [item for item in dossier["evidence"] if item["id"] != submission["id"]]
-            dossier["manifest_root"] = _manifest_root(dossier["evidence"])
+            dossier["manifest_root"] = _manifest_root(dossier["evidence"], dossier["rules_root"])
         submission["status"] = "INCONCLUSIVE_TIMEOUT"
         self._release_bond(submission, submission["researcher"])
         self._finish_submission(dossier, submission)
@@ -680,6 +712,9 @@ class NoemaHub(gl.Contract):
         child_tx = _text(child_tx, "child transaction", 66)
         if re.fullmatch(r"0x[0-9a-fA-F]{64}", parent_tx) is None or re.fullmatch(r"0x[0-9a-fA-F]{64}", child_tx) is None:
             raise gl.vm.UserError("[EXPECTED] invalid payout transaction hash")
+        receipt_key = _sha(parent_tx.lower() + ":" + child_tx.lower())
+        if receipt_key in self.consumed_payout_receipts:
+            raise gl.vm.UserError("[EXPECTED] payout receipt pair already consumed")
         outcome = _verify_payout_receipts(parent_tx, child_tx, str(gl.message.contract_address),
                                           item["recipient"], int(item["amount"]), item["created_at"])
         if not isinstance(outcome, dict) or outcome.get("outcome") == "UNAVAILABLE":
@@ -716,6 +751,7 @@ class NoemaHub(gl.Contract):
         item["child_tx"] = child_tx.lower()
         item["reconciled_at"] = _iso()
         item["receipt_outcome"] = outcome["outcome"]
+        self.consumed_payout_receipts[receipt_key] = withdrawal_id
         self.withdrawals[withdrawal_id] = _json(item)
 
     @gl.public.write.payable

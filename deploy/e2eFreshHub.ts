@@ -5,7 +5,7 @@ import { createAccount, createClient, generatePrivateKey } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import { TransactionHashVariant, TransactionStatus } from "genlayer-js/types";
 import type { GenLayerClient, TransactionHash } from "genlayer-js/types";
-import { selectSponsorKey, sweepableSponsorBalance } from "./sponsorKey.js";
+import { selectSponsorKey, sweepableSponsorBalance } from "./sponsorKey.ts";
 
 const E2E_PATH = path.resolve(process.cwd(), "deployments/e2e-studionet.json");
 const RPC_ENDPOINT = "https://studio.genlayer.com/api";
@@ -222,7 +222,9 @@ export default async function main(researcherClient: GenLayerClient<any>) {
       saveRun({ phase: "RESUMING_EXISTING_DOSSIER", sponsorFunding: { skipped: "dossier and sponsor funding are already finalized" } });
     }
 
-    const baselineUrl = "https://api.github.com/repos/openai/codex/git/trees/main";
+    const sourceCommit = "e1b9c9457ceca75a99b034a5df39ac48c3998d15";
+    const sourceTree = "b8be7cdf257c4f6aaf4250060a5b37d5c045ab5d";
+    const baselineUrl = `https://api.github.com/repos/openai/codex/git/trees/${sourceTree}`;
     const baselineClaim = "The official openai/codex default-branch Git tree lists the root path LICENSE as a blob, but the tree metadata contains no license text.";
     const closesAt = BigInt(Math.floor(Date.now() / 1000) + 6 * 60 * 60);
     let dossierId: string;
@@ -238,9 +240,10 @@ export default async function main(researcherClient: GenLayerClient<any>) {
         "Does the official openai/codex default-branch root LICENSE file expressly declare Apache License 2.0?",
         "Choose Position A only when the root LICENSE file served from the official openai/codex default branch explicitly names Apache License Version 2.0. Choose Position B only when that official file explicitly names another license or explicitly states that no license applies. If the official document does not establish either condition, leave the dossier unresolved.",
         "Apache-2.0 declared", "Apache-2.0 not declared",
-        "Accept only the official openai/codex default-branch tree metadata from api.github.com and document text from raw.githubusercontent.com/openai/codex/main. Exclude forks, mirrors, reposts, social media, search snippets, and third-party summaries.",
+        `Accept only the immutable official openai/codex Git tree ${sourceTree} and document text at commit ${sourceCommit}. Exclude mutable branches, forks, mirrors, reposts, social media, search snippets, and third-party summaries.`,
         JSON.stringify([{ url: baselineUrl, claim: baselineClaim }]), closesAt,
-      ], SPONSOR_REWARD);
+      ], SPONSOR_REWARD, (hash) => saveRun({ phase: "SPONSOR_BASELINE_PENDING", sponsorTransaction: hash,
+        baselineUrl, baselineClaim }));
       dossierId = await read(researcherClient, hub, "find_latest_dossier_by_sponsor", [sponsorAccount.address]);
       afterBaseline = await waitForDossier(researcherClient, hub, dossierId,
         (value) => value.status === "OPEN" || value.status === "CLOSED_REFUNDED", "baseline witnessing and adjudication");
@@ -251,8 +254,8 @@ export default async function main(researcherClient: GenLayerClient<any>) {
       throw new Error(`Dossier is not ready to continue the E2E: ${afterBaseline.status}`);
     }
 
-    const url = "https://raw.githubusercontent.com/openai/codex/main/LICENSE";
-    const claim = "The root LICENSE file begins with Apache License Version 2.0, January 2004, and states the Apache License's terms, so it explicitly declares Apache License 2.0.";
+    const url = `https://raw.githubusercontent.com/openai/codex/${sourceCommit}/LICENSE`;
+    const claim = "The root LICENSE file contains the exact statement: Licensed under the Apache License, Version 2.0 (the \"License\");";
     const salt = resuming ? String(previous.salt) : randomBytes(32).toString("hex");
     const packet = { domain: "NOEMA_DISCLOSURE_V1", chain_id: "61999", hub: hub.toLowerCase(), dossier_id: dossierId,
       researcher: researcher.toLowerCase(), url, claim, salt };
@@ -343,9 +346,23 @@ export default async function main(researcherClient: GenLayerClient<any>) {
     let reconcileTx = resuming ? String(previous?.reconcileTx ?? "") : "";
     let reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
     if (reconciledWithdrawal.status === "PENDING") {
-      reconcileTx = await write(researcherClient, hub, "reconcile_withdrawal", [pendingWithdrawal.id, withdrawalTx, childHash], 0n,
-        (hash) => saveRun({ phase: "RECONCILE_PENDING", reconcileTx: hash, withdrawalId: pendingWithdrawal.id,
-          withdrawalParent: withdrawalTx, withdrawalChild: childHash }));
+      let unavailableError = "";
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          reconcileTx = await write(researcherClient, hub, "reconcile_withdrawal", [pendingWithdrawal.id, withdrawalTx, childHash], 0n,
+            (hash) => saveRun({ phase: "RECONCILE_PENDING", reconcileTx: hash, reconciliationAttempt: attempt + 1,
+              withdrawalId: pendingWithdrawal.id, withdrawalParent: withdrawalTx, withdrawalChild: childHash }));
+          unavailableError = "";
+          break;
+        } catch (error) {
+          unavailableError = error instanceof Error ? error.message : String(error);
+          if (!unavailableError.includes("finalized payout receipt is unavailable") || attempt === 5) throw error;
+          saveRun({ phase: "RECONCILE_RETRY", reconciliationAttempt: attempt + 1,
+            reconciliationRollback: "FINALIZED_RECEIPT_UNAVAILABLE", withdrawalId: pendingWithdrawal.id });
+          await new Promise((resolve) => setTimeout(resolve, 15_000));
+        }
+      }
+      if (unavailableError) throw new Error(unavailableError);
       reconciledWithdrawal = await read(researcherClient, hub, "get_withdrawal", [pendingWithdrawal.id]);
     }
     if (reconciledWithdrawal.status !== "DELIVERED"

@@ -31,7 +31,7 @@ Contract prompts label all dossier and web content as untrusted data and instruc
 
 ## Source limitations
 
-An HTTPS response proves the bytes validators fetched for a requested URL at their observation time, not the publisher identity, final response origin, or redirect chain. Noema stores the normalized requested origin separately, leaves verified response provenance empty when GenVM does not expose it, and stores a content digest for later comparison. Only 2xx responses are semantically evaluated.
+Noema does not trust publisher labels or requested origin as proof. Admission requires authenticated direct-response origin metadata matching the normalized HTTPS URL, HTTP 2xx, full-body inspection, and a verbatim support passage present in those exact bytes. The only alternative is the explicit immutable GitHub API/raw allowlist, which requires matching repository and content-addressed object identity and is labeled separately from direct-response provenance. Missing or conflicting origin metadata, ordinary redirects, oversized bodies and conflicting evidence fail closed.
 
 Temporary source unavailability (including HTTP 429 and 5xx statuses) is treated as retryable and returns the researcher bond; it is not treated as a substantive policy rejection. Permanent missing-source responses such as 404 are rejected. A successful-looking body on a non-success status is never accepted as documentary evidence. Dynamic resources can vary between validators. Such instability may prevent consensus. Researchers should prefer first-party records with stable content and durable URLs.
 
@@ -47,6 +47,6 @@ All user text, arrays, pages, queues, lifetime records and retained evidence are
 - configure the Hub once with both worker addresses;
 - inspect all three schemas;
 - verify `accounting_ok` and `solvent_ok` before and after an end-to-end flow;
-- verify the finalized outgoing child, recipient balance increase, Hub credit readback, and duplicate-withdraw protection before reporting a payout as successful;
+- verify the finalized outgoing child through canonical StudioNet RPC under validator replay, recipient balance increase, Hub credit readback, single-use receipt pair, and duplicate-withdraw protection before reporting a payout as successful;
 - publish addresses and deployment transaction hashes;
 - never label a transport redirect chain as verified.

@@ -39,15 +39,16 @@ Every accepted record persists:
 
 - requested URL and requested host;
 - normalized requested URL, requested host and requested origin;
-- independently verified response origin when the runtime exposes one (empty on current StudioNet);
+- independently verified response origin; evidence fails closed when the runtime cannot supply it;
 - HTTP status and validator observation time;
 - SHA-256 digest of the complete fetched response body;
 - SHA-256 digest of the exact accepted claim;
+- the exact verbatim support passage and its SHA-256 digest;
 - the complete six-field admissibility verdict.
 
-The Hub derives an ordered manifest root from evidence ID, claim digest, content digest, and source host. A verdict callback is rejected unless its manifest root matches current Hub state. Validators independently compare the final outcome, sufficiency, ordered decisive IDs, and closure-basis digest.
+The Hub freezes the sponsor's complete rules into `rules_root` and derives an ordered manifest root from that root plus each evidence record's claim, content, support-passage and verified-origin digests. A verdict callback is rejected unless both roots match current Hub state.
 
-Noema does not claim to obtain a transport-level redirect trace, publisher identity, or final response URL when GenVM does not expose them. Requested provenance is stored separately and `transport_origin_verified=false`; requested data is never promoted to authenticated canonical provenance. Only HTTP 2xx responses can become attested evidence.
+Noema never promotes a requested host, document self-claim, or publisher label to authenticated provenance. Normally, a successful response must expose an exact direct final URL matching the normalized request. The sole fallback is an explicitly allowlisted immutable GitHub API/raw object whose repository and object identifier are content-addressed and mutually consistent; it receives the distinct `VERIFIED_CONTENT_ADDRESSED_ORIGIN` label. Missing or conflicting origin metadata, ordinary redirects, non-2xx responses, oversized sources and support passages absent from the complete fetched bytes all fail closed.
 
 ## Bounded state and liveness
 
@@ -130,14 +131,15 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 
 ## Verified Studionet release
 
-- Hub: `0x52282B21156C22d1800d0302Ea1e0FFc4De637BF`
-- SourceWitness: `0x48B78b602D42bdA41DdA4ABC11820E5CE34391f7`
-- VerdictEngine: `0x272F7f1ab9edd2320c9C5F697E0DC1AA97795745`
-- deployed source commit: `623407424e30e5b31daf842c82f3031ae34f8227`
+- Hub: `0x2abC9A485924F7fB43C31875ff6bc865a1827633`
+- SourceWitness: `0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C`
+- VerdictEngine: `0xf4917237F5e4e6b990BD6B982B53b8d04f244439`
+- deployed source revision: `WORKTREE-2026-10-20-v4`; exact deployed/local SHA-256 equality was independently read back for all three contracts
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
+- production frontend: [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_7cY56FXJ5UQeHrcP8zE94BfbZzy2`
 
-Native withdrawals use the EVM recipient interface and external finalized value messages. The production UI verifies the child receipt, exact recipient and amount, `value_credited`, the recipient wallet balance delta, and the Hub credit readback before reporting payment. The CLI-originated StudioNet payout proof is recorded in `deployments/studionet-e2e-latest.json`. The separate browser-wallet run is recorded in `deployments/studionet-browser-wallet-verification.json`: it verifies wallet-funded dossier creation, baseline attestation/verdict, and commitment sealing, but its disclosure attempt reverted because the reveal did not match the seal. No browser-run reward or payout is claimed.
+Native withdrawals use the EVM recipient interface and external finalized value messages. The Hub—not the Vercel gateway—fetches canonical StudioNet parent and child receipts under validator replay and verifies finality, linkage, sender, recipient, exact amount, calldata, timestamp, `value_credited`, and single-use receipt consumption before delivery or one-time recredit. The completed CLI/GenLayerJS StudioNet proof is recorded in `deployments/studionet-e2e-latest.json`. The production browser-wallet record proves a separate funded `open_dossier` transaction, asynchronous Hub→Witness→Hub execution, fail-closed HTTP 403 rejection, and full rollback to sponsor Hub credit; it does not claim a browser-originated payout.
 
 The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The deployment source hashes and transaction IDs are in `deployments/studionet.json`; `deployments/e2e-studionet.json` is a verbose runner log and may include historical attempts. Use the concise release record for current acceptance claims.

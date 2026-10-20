@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectSponsorKey, sweepableSponsorBalance } from "./sponsorKey.js";
+import { selectSponsorKey, sweepableSponsorBalance } from "../deploy/sponsorKey.ts";
 
 const generated = `0x${"b".repeat(64)}` as `0x${string}`;
 const provided = `0x${"a".repeat(64)}`;
