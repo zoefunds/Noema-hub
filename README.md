@@ -133,6 +133,15 @@ The release configuration targets GenLayer Studionet only:
 
 See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deployment](docs/DEPLOYMENT.md), and the [verification record](docs/VERIFICATION.md) before using the protocol.
 
+## Testing from the frontend
+
+Both forms that take free-text input have a one-click autofill with real, detailed, contract-accepted data, so anyone with a funded Studionet wallet can exercise the full lifecycle without composing their own dossier:
+
+- **Dossier creation** (`/field/new`) — "Load verified example ↘" fills every field: title, question, both positions, decision rule, source policy, reward, and closing window, plus **two** baseline sources (demonstrating multi-baseline support, not just the minimum of one). Both baseline sources are real, live, immutable GitHub objects (a Git tree and a Git commit from `openai/codex`, addressed by their exact 40-character SHA) that the contract's content-addressed provenance fallback accepts, and both are genuinely insufficient to decide the question on their own — exactly what `open_dossier` requires of a baseline.
+- **Research disclosure** (on any open dossier's page) — "Load real license evidence ↘" fills the source URL and claim with the exact immutable `raw.githubusercontent.com` object and verbatim text that decisively resolves the example dossier above: the official `openai/codex` `LICENSE` file at that same commit, which explicitly declares Apache License 2.0.
+
+Because the evidence-reservation key is scoped to `(dossier, url, claim)`, any number of testers can use the *same* autofilled values concurrently on their *own* freshly created dossiers without colliding with each other. The pairing is the same decisive public-source example already used for the verified Studionet release below, so it is known to resolve end to end: baseline witnessing leaves the dossier open, research disclosure attests and settles it as `POSITION_A`, and the disclosing researcher is credited the reward.
+
 ## Verified Studionet release
 
 - Hub: `0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4`
