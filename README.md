@@ -131,17 +131,17 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 
 ## Verified Studionet release
 
-- Hub: `0x8bEd4aB285B33CAefFEc06Fa175B797b58f531A5`
-- SourceWitness: `0x97F7625A26C9419FA4e6cb2ec44bf7f740BA643c`
-- VerdictEngine: `0xFB07B39bbBa8410ca2df209D09632654e66C89ec`
-- source-matched release commit: `aea785e7460e61e4739bd0fa2621af56b9d9c612`; exact deployed/local SHA-256 equality was independently read back for all three contracts
+- Hub: `0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4`
+- SourceWitness: `0x9D2CF136821F01369fbBc462F5fE868670c92785`
+- VerdictEngine: `0x22C980402f1bF4D15333aF4CE5002A3f19DC9eA9`
+- source-matched release commit: `2391ac15d210e8d505cb7bd3c8e08d73788883b3`; exact deployed/local SHA-256 equality was independently read back for all three contracts
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true
-- production frontend: [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_DiprwumfRqdx5ANy7DW64fkGLANn`
+- production frontend: [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_DpyU9D9GUUrGifdvdp2ciN3hcbQz`
 
-Native withdrawals use the EVM recipient interface and external finalized value messages. The Hub—not the Vercel gateway—fetches canonical StudioNet parent and child receipts under validator replay and verifies finality, linkage, sender, recipient, exact amount, calldata, timestamp, `value_credited`, and single-use receipt consumption before delivery or one-time recredit. The completed CLI/GenLayerJS StudioNet proof is recorded in `deployments/studionet-e2e-latest.json`. Executable tests now run conflicting-evidence consensus, economically non-decisive Hub settlement, stateful candidate-verdict timeout rollback, and stateful failed-receipt replay/duplicate-credit rejection. `deployments/studionet-timeout-rollback.json` separately records the real asynchronous StudioNet baseline-timeout lifecycle.
+Native withdrawals use the EVM recipient interface and external finalized value messages. The Hub—not the Vercel gateway—fetches canonical StudioNet parent and child receipts under validator replay and verifies finality, linkage, sender, recipient, exact amount, calldata, timestamp, `value_credited`, and single-use receipt consumption before delivery or one-time recredit. The current source-matched CLI/GenLayerJS StudioNet proof is recorded in `deployments/e2e-studionet.json`; older artifacts are explicitly historical. Executable tests now run conflicting-evidence consensus, economically non-decisive Hub settlement, stateful candidate-verdict timeout rollback, and stateful failed-receipt replay/duplicate-credit rejection.
 
 The timeout lifecycle funded `noema-2`, recorded its emitted SourceWitness child, waited through the actual 1,800-second StudioNet deadline, and finalized `expire_stage` as `0x0498f234793d69aa30db3d09a7f71d3014ee585fa4a9a314b0e39f5f73b7c6aa`. Readback proved `BASELINE_STAGE_TIMEOUT`, zero remaining reward escrow, exact `0.001 GEN` sponsor-credit restoration, and healthy accounting.
 
-The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository so evaluators can test the flow without inventing inputs. The deployment source hashes and transaction IDs are in `deployments/studionet.json`; `deployments/studionet-e2e-latest.json` and `deployments/studionet-timeout-rollback.json` are the current acceptance records. `deployments/e2e-studionet.json` is diagnostic runner history and must not be used as the current release summary.
+The creation and disclosure forms include one-click real-data examples sourced from the official `openai/codex` repository. The frontend stores the researcher address, transaction state, and an exportable recovery packet for every sealed disclosure; it refuses reveal from a different wallet. The deployment source hashes and transaction IDs are in `deployments/studionet.json`; `deployments/e2e-studionet.json` is the current complete CLI lifecycle record. The browser-created current-release dossier `noema-2` has a finalized browser opening transaction but is intentionally not presented as a complete browser payout lifecycle until its seal, reveal, reward, and reconciled withdrawal are completed.

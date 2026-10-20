@@ -27,11 +27,11 @@ The current StudioNet deployment is:
 
 | Contract | Address | Deployment transaction |
 |---|---|---|
-| NoemaHub | `0x8bEd4aB285B33CAefFEc06Fa175B797b58f531A5` | `0xdee8bc0903079cc4d95ed949012c710e9b2ff030bb31cea4a7eae5f2f6636ca4` |
-| SourceWitness | `0x97F7625A26C9419FA4e6cb2ec44bf7f740BA643c` | `0x0718ac3812fbf5cfe39610e1a10082c18996c24db74f074d5456ca9edc933917` |
-| VerdictEngine | `0xFB07B39bbBa8410ca2df209D09632654e66C89ec` | `0xa94e5424b21c08c3808a96a7f6b4403169ee7b883e63e45a38d3d96a03aee9ff` |
+| NoemaHub | `0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4` | `0x8fbb85ace3d58ec90b4eaaa1d89e3bae77699cbeb4fc8abba6d35c6cfb0d57ca` |
+| SourceWitness | `0x9D2CF136821F01369fbBc462F5fE868670c92785` | `0xcae8b91b3d1d86a5e36ab649250055e4e55c05845e50295950ad1e5a8c20b40a` |
+| VerdictEngine | `0x22C980402f1bF4D15333aF4CE5002A3f19DC9eA9` | `0x6a64467cbabe93f52479eafe977f0d5356f3f453d04e3135115352b5a6fbbb73` |
 
-The one-time worker binding transaction is `0x64ada52b21b3dfaaeca73e61bebe42164fb6e4171c6ff14c204a69b0ac231804`. This release enables native payouts and its contract sources are committed in `aea785e7460e61e4739bd0fa2621af56b9d9c612`; `deployments/studionet.json` records exact local and independently retrieved deployed source SHA-256 values for all three contracts.
+The one-time worker binding transaction is `0x61200c1f911a2be12ba93a48c5c1080bfac976b46904f64de182886d603ff532`. This release enables native payouts and its contract sources are committed in `2391ac15d210e8d505cb7bd3c8e08d73788883b3`; `deployments/studionet.json` records exact local and independently retrieved deployed source SHA-256 values for all three contracts.
 
 ## Real-network acceptance test
 
@@ -48,7 +48,7 @@ For a deployment signer whose CLI keystore password is unavailable, the runner a
 
 The current acceptance dossier `noema-1` used immutable first-party OpenAI Codex Git tree and LICENSE objects. Its result was `POSITION_A`; `note-1` was the sole decisive submission and the counterfactual without it was `UNRESOLVED`. The full 10,926-byte LICENSE response was digested and the claim was bound to the exact support quote `Licensed under the Apache License, Version 2.0 (the "License");`. The researcher earned `0.0011 GEN`, including the returned bond. Withdrawal parent `0x0aa20b30de1ee715cfb510b610ce1e7006f9b7a44a6abb7920f0f070738e6550` emitted child `0x68f5b61a30dc46d14d61bf6f6bcbbbc49bfebb94288a7fe9379c27263495ad4f`, finalized with `value_credited=true`, and was reconciled by `0x6c953a16ec5769e95025eeab1f8b35c07cb61708a38e89748f5adbb549a5aa06` as `DELIVERED`. Hub credit changed from `1100000000000000` to zero; the wallet changed from `459599999967045000` to `460699999967045000` atto. Accounting and solvency remained true, and a duplicate withdrawal was rejected. The temporary sponsor's unused `0.002 GEN` was returned separately and its generated key file was removed.
 
-The current transaction-level acceptance proof is [`deployments/studionet-e2e-latest.json`](../deployments/studionet-e2e-latest.json). It is a CLI/GenLayerJS-originated run and demonstrates successful delivery on the current contracts. Historical legacy-contract incidents are kept separately in [`deployments/legacy-withdrawal-failure.json`](../deployments/legacy-withdrawal-failure.json) and are not evidence about this release.
+The current transaction-level acceptance proof is [`deployments/e2e-studionet.json`](../deployments/e2e-studionet.json), specifically its `freshRedeploymentRun` record. It is a CLI/GenLayerJS-originated run and demonstrates successful delivery on the current contracts. Historical legacy-contract incidents are kept separately in [`deployments/legacy-withdrawal-failure.json`](../deployments/legacy-withdrawal-failure.json) and are not evidence about this release.
 
 To reproduce the real deadline path without redeploying, activate a funded account and run:
 
@@ -60,7 +60,7 @@ The timeout harness resumes its exact pending dossier after transient RPC failur
 
 ## Production application checks
 
-The hardened frontend is deployed at [neoma-hub.vercel.app](https://neoma-hub.vercel.app) as Vercel production deployment `dpl_DiprwumfRqdx5ANy7DW64fkGLANn`. Its 2026-10-20 `/api/health` response reported chain 61999, Hub `0x8bEd4aB285B33CAefFEc06Fa175B797b58f531A5`, reachable RPC, and available Hub code. The production dossier page visibly renders the frozen rules root, final manifest root, exact support quote, full source byte count, verified content-addressed origin, decisive record, and final resolution.
+The hardened frontend is deployed at [neoma-hub.vercel.app](https://neoma-hub.vercel.app) as Vercel production deployment `dpl_DpyU9D9GUUrGifdvdp2ciN3hcbQz`. Its 2026-10-20 `/api/health` response reported chain 61999, Hub `0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4`, reachable RPC, and available Hub code. The production dossier page visibly renders the frozen rules root, final manifest root, exact support quote, full source byte count, verified content-addressed origin, decisive record, and final resolution.
 
 The funded payout lifecycle recorded above ran through GenLayerJS with a throwaway signer. The earlier browser-wallet rollback artifact targets the immediately preceding source-matched release and is retained as historical evidence, not represented as a transaction on the current Hub. The current release adds a live asynchronous StudioNet timeout record in `deployments/studionet-timeout-rollback.json`. In the hardened source, permissionless `reconcile_withdrawal` re-fetches finalized parent and child records directly from canonical StudioNet RPC under validator replay, changes a verified failed child to `FAILED_RECREDITED` exactly once, consumes each receipt pair once, records any backing shortfall, and blocks another withdrawal until recapitalization. The project-controlled Vercel route is not a settlement authority.
 
