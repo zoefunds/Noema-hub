@@ -31,7 +31,11 @@ def test_deployer_supplies_every_hub_constructor_argument_including_native_payou
     assert 'deploy(client, "contracts/noema_hub.py", ["", "", enableNativePayouts])' in source
 
 
-def test_unavailable_http_callback_refunds_researcher_bond_and_marks_submission_retryable():
+def test_unavailable_http_callback_forfeits_bond_and_marks_submission_retryable():
+    # The researcher chooses the source URL. A source they control that returns
+    # a temporary-looking HTTP status must not be a free, zero-cost way to
+    # exhaust a dossier's bounded lifetime-submission capacity, so the bond is
+    # forfeited to the sponsor exactly like an outright rejection.
     tree = ast.parse(HUB.read_text())
     contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
     method = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "record_attestation")
@@ -39,9 +43,51 @@ def test_unavailable_http_callback_refunds_researcher_bond_and_marks_submission_
                        and ast.unparse(node.test) == "result.get('status') == 'UNAVAILABLE'")
     body = "\n".join(ast.unparse(statement) for statement in unavailable.body)
     assert "submission['status'] = 'RETRYABLE'" in body
-    assert "self._release_bond(submission, submission['researcher'])" in body
+    assert "self._release_bond(submission, dossier['sponsor'])" in body
     assert "self._finish_submission(dossier, submission)" in body
-    assert "dossier['sponsor']" not in body
+
+
+def test_stale_callback_forfeits_bond_rather_than_refunding_free_late_timing():
+    # The researcher also chooses disclosure timing with full knowledge of
+    # closes_at; a disclosure that only resolves after the dossier closes is
+    # attributable to that choice, not an uncontrollable outage.
+    tree = ast.parse(HUB.read_text())
+    contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
+    method = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "record_attestation")
+    stale = next(node for node in ast.walk(method) if isinstance(node, ast.If)
+                 and ast.unparse(node.test) == "dossier['status'] != 'OPEN' or _now() >= int(dossier['closes_at'])")
+    body = "\n".join(ast.unparse(statement) for statement in stale.body)
+    assert "submission['status'] = 'STALE'" in body
+    assert "self._release_bond(submission, dossier['sponsor'])" in body
+
+
+def test_worker_callbacks_and_expire_stage_are_mutually_exclusive_on_deadline():
+    hub = HUB.read_text()
+    # Every callback path that can finalize a semantic stage must first check
+    # the same stage_deadline boundary that gates expire_stage(), so a late
+    # callback and a timeout expiry can never both act on the same stage.
+    assert hub.count("semantic stage deadline elapsed; call expire_stage") == 4
+    assert "_now() < deadline" in hub
+
+
+def test_expire_dossier_defers_to_in_flight_adjudication():
+    hub = HUB.read_text()
+    assert "in-flight adjudication must resolve or expire before dossier closure" in hub
+    tree = ast.parse(hub)
+    contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
+    method = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "expire_dossier")
+    source = ast.unparse(method)
+    guard = source.index("if pending_id and _now() < stage_deadline")
+    close = source.index("self._close_refund(dossier, 'DEADLINE_ELAPSED')")
+    assert guard < close
+
+
+def test_content_addressed_provenance_is_not_conflated_with_transport_verification():
+    witness = WITNESS.read_text()
+    hub = HUB.read_text()
+    assert 'transport_origin_verified = provenance_status == "VERIFIED_DIRECT_RESPONSE"' in witness
+    assert "neither ever proves publisher identity or publication time" in witness.lower()
+    assert 'provenance_status == "VERIFIED_CONTENT_ADDRESSED_ORIGIN" and result.get("transport_origin_verified") is False' in hub
 
 
 def test_workers_are_bound_and_callbacks_are_authenticated():

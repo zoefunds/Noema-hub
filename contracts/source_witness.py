@@ -132,8 +132,19 @@ def _inspect(question, rule, policy, accepted_manifest, requested_url, claim):
                         "basis": "The source exceeds the all-content inspection limit; partial inspection is forbidden."}
             body = raw_body.decode("utf-8", errors="strict")
             status_code = _response_status(response)
-            verified_origin, origin_verified, redirects, provenance_status = _response_provenance(
+            verified_origin, origin_admissible, redirects, provenance_status = _response_provenance(
                 response, requested_url)
+            # `origin_admissible` only says this origin is acceptable evidence at
+            # all. It is deliberately NOT the same claim as transport-layer
+            # verification: VERIFIED_CONTENT_ADDRESSED_ORIGIN is admissible
+            # because the requested path is itself content-addressed (immutable
+            # object identity), not because a final response URL was observed
+            # and matched. Only VERIFIED_DIRECT_RESPONSE means the transport
+            # layer itself was authenticated. Collapsing the two into one
+            # boolean would let a frontend or downstream policy mistake
+            # "self-verifying by content address" for "verified hosting", and
+            # neither ever proves publisher identity or publication time.
+            transport_origin_verified = provenance_status == "VERIFIED_DIRECT_RESPONSE"
         except Exception:
             return {"status": "UNAVAILABLE", **{f: False for f in FIELDS},
                     "publisher": "", "canonical_url": "", "published_at": "",
@@ -165,10 +176,10 @@ def _inspect(question, rule, policy, accepted_manifest, requested_url, claim):
                     "content_digest": content_digest, "http_status": status_code,
                     "support_quote": "", "support_digest": "", "source_size": len(raw_body),
                     "verified_response_origin": verified_origin,
-                    "transport_origin_verified": origin_verified, "redirect_chain": redirects,
+                    "transport_origin_verified": transport_origin_verified, "redirect_chain": redirects,
                     "provenance_status": provenance_status,
                     "basis": f"HTTP status {status_code} is outside the accepted 2xx range; classified as {classification}."}
-        if not origin_verified:
+        if not origin_admissible:
             return {"status": "REJECTED", **{f: False for f in FIELDS},
                     "document_publisher": "", "document_canonical_url": "", "published_at": "",
                     "content_digest": content_digest, "http_status": status_code,
@@ -196,7 +207,7 @@ def _inspect(question, rule, policy, accepted_manifest, requested_url, claim):
         answer["http_status"] = status_code
         answer["source_size"] = len(raw_body)
         answer["verified_response_origin"] = verified_origin
-        answer["transport_origin_verified"] = origin_verified
+        answer["transport_origin_verified"] = transport_origin_verified
         answer["redirect_chain"] = redirects
         answer["provenance_status"] = provenance_status
         return answer

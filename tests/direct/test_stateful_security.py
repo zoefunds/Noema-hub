@@ -23,7 +23,7 @@ def _base_dossier(sponsor: str, researcher: str) -> dict:
         "active_ids": ["note-1"],
         "queue": ["note-1"],
         "pending_id": "note-1",
-        "stage_deadline": "100",
+        "stage_deadline": "99999999999",
         "next_queue_position": 2,
         "submission_ids": ["note-1"],
     }
@@ -382,7 +382,7 @@ def test_out_of_order_attestation_callback_violates_fifo_and_reverts(direct_vm, 
     dossier = {"id": "noema-stateful", "sponsor": _address("1"), "status": "OPEN",
         "reward_atto": "1000", "rules_root": "a" * 64, "manifest_root": "b" * 64,
         "evidence": [], "active_ids": ["note-1", "note-2"], "queue": ["note-1", "note-2"],
-        "pending_id": "note-2", "stage_deadline": "100", "next_queue_position": 3,
+        "pending_id": "note-2", "stage_deadline": "99999999999", "next_queue_position": 3,
         "submission_ids": ["note-1", "note-2"], "closes_at": "99999999999"}
     sub1 = {"id": "note-1", "dossier_id": "noema-stateful", "researcher": researcher_a,
             "status": "QUEUED", "bond_atto": "100", "bond_released": False}
@@ -413,7 +413,7 @@ def test_out_of_order_verdict_callback_violates_fifo_and_reverts(direct_vm, dire
         "reward_atto": "1000", "rules_root": "a" * 64, "manifest_root": "b" * 64,
         "evidence": [_evidence("note-1"), _evidence("note-2")],
         "active_ids": ["note-1", "note-2"], "queue": ["note-1", "note-2"],
-        "pending_id": "note-2", "stage_deadline": "100", "next_queue_position": 3,
+        "pending_id": "note-2", "stage_deadline": "99999999999", "next_queue_position": 3,
         "submission_ids": ["note-1", "note-2"], "closes_at": "99999999999"}
     sub1 = {"id": "note-1", "dossier_id": "noema-stateful", "researcher": researcher_a,
             "status": "QUEUED", "bond_atto": "100", "bond_released": False}
@@ -482,3 +482,171 @@ def test_accounting_invariant_holds_through_a_full_loss_and_recapitalization(dir
     assert stats["accounting_ok"] is True
     assert stats["payout_recovery_required"] == "0"
     assert int(hub.deposited) == 2000
+
+
+def test_late_attestation_callback_after_deadline_reverts_then_expire_stage_succeeds(
+    direct_vm, direct_deploy
+):
+    """A worker callback and expire_stage() must never both be able to act on the
+    same stage: once the deadline has elapsed, only the timeout path may finalize it."""
+    witness, researcher = _address("9"), _address("2")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.witness_address = witness
+    hub.configured = True
+    dossier = _base_dossier(_address("1"), researcher)
+    dossier["stage_deadline"] = "100"
+    dossier["closes_at"] = "99999999999"
+    submission = {**_submission(researcher), "status": "WITNESS_PENDING"}
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions[submission["id"]] = json.dumps(submission)
+    hub.bond_escrow = 100
+
+    direct_vm.warp("1970-01-01T00:01:41Z")  # 101s: at/after the stage deadline
+    direct_vm.sender = bytes.fromhex(witness[2:])
+    with direct_vm.expect_revert("semantic stage deadline elapsed; call expire_stage"):
+        hub.record_attestation("note-1", json.dumps({"status": "ATTESTED"}))
+    assert hub.get_submission("note-1")["status"] == "WITNESS_PENDING"
+
+    # Only the timeout path may act now, and it does.
+    hub.expire_stage(dossier["id"])
+    assert hub.get_submission("note-1")["status"] == "INCONCLUSIVE_TIMEOUT"
+    assert hub.get_credit(researcher) == "100"
+
+
+def test_late_verdict_callback_after_deadline_reverts_then_expire_stage_rolls_back(
+    direct_vm, direct_deploy
+):
+    """The same exclusivity must hold for record_verdict: a late decisive verdict
+    can never race an expiry rollback for the same bond and reward."""
+    engine, researcher = _address("9"), _address("2")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.engine_address = engine
+    hub.configured = True
+    hub.reward_escrow = 1000
+    dossier = _base_dossier(_address("1"), researcher)
+    dossier["stage_deadline"] = "100"
+    dossier["evidence"] = [_evidence("note-1")]
+    submission = _submission(researcher, "VERDICT_PENDING")
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions[submission["id"]] = json.dumps(submission)
+    hub.bond_escrow = 100
+
+    direct_vm.warp("1970-01-01T00:01:41Z")
+    direct_vm.sender = bytes.fromhex(engine[2:])
+    result = {"outcome": "POSITION_A", "decisive_ids": ["note-1"], "rules_root": dossier["rules_root"],
+              "manifest_root": dossier["manifest_root"], "counterfactual_outcome": "UNRESOLVED",
+              "contribution_required": True}
+    with direct_vm.expect_revert("semantic stage deadline elapsed; call expire_stage"):
+        hub.record_verdict("note-1", json.dumps(result))
+    # No reward can have moved: the late verdict never took effect.
+    assert int(hub.reward_escrow) == 1000
+    assert hub.get_submission("note-1")["status"] == "VERDICT_PENDING"
+
+    hub.expire_stage(dossier["id"])
+    assert hub.get_submission("note-1")["status"] == "INCONCLUSIVE_TIMEOUT"
+    assert hub.get_credit(researcher) == "100"
+    assert int(hub.reward_escrow) == 1000
+    # The tentatively appended candidate evidence was rolled back.
+    assert hub.get_dossier(dossier["id"])["evidence"] == []
+
+
+def test_expire_dossier_defers_while_adjudication_is_still_within_its_own_deadline(
+    direct_vm, direct_deploy
+):
+    """closes_at (research admission) and stage_deadline (in-flight adjudication) are
+    distinct: a sponsor cannot be refunded out from under a submission that is still
+    legitimately being witnessed or resolved."""
+    sponsor, researcher = _address("1"), _address("2")
+    hub = direct_deploy(HUB, "", "", True)
+    dossier = _base_dossier(sponsor, researcher)
+    dossier["closes_at"] = "50"
+    dossier["stage_deadline"] = "99999999999"
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions["note-1"] = json.dumps({**_submission(researcher), "status": "WITNESS_PENDING"})
+    hub.reward_escrow = 1000
+    hub.bond_escrow = 100
+
+    direct_vm.warp("1970-01-01T00:16:40Z")  # 1000s: past closes_at, far before stage_deadline
+    with direct_vm.expect_revert("in-flight adjudication must resolve or expire before dossier closure"):
+        hub.expire_dossier(dossier["id"])
+    # The sponsor's reward was not touched by the blocked attempt.
+    assert hub.get_dossier(dossier["id"])["status"] == "OPEN"
+    assert int(hub.reward_escrow) == 1000
+
+    # Once the adjudication's own deadline has also elapsed, closure is allowed.
+    dossier["stage_deadline"] = "500"
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.expire_dossier(dossier["id"])
+    assert hub.get_dossier(dossier["id"])["status"] == "CLOSED_REFUNDED"
+    assert int(hub.reward_escrow) == 0
+    assert hub.get_credit(sponsor) == "1000"
+
+
+def test_stale_and_unavailable_callbacks_forfeit_bond_to_sponsor_not_researcher(
+    direct_vm, direct_deploy
+):
+    """Both the researcher's chosen disclosure timing (STALE) and their chosen
+    source (UNAVAILABLE) are fully within their control; neither may be a
+    free way to burn through the dossier's bounded lifetime capacity."""
+    witness, sponsor, researcher = _address("9"), _address("1"), _address("2")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.witness_address = witness
+    hub.configured = True
+    direct_vm.sender = bytes.fromhex(witness[2:])
+
+    # STALE: the dossier has already closed, but the adjudication stage has not.
+    stale_dossier = _base_dossier(sponsor, researcher)
+    stale_dossier["closes_at"] = "50"
+    stale_dossier["stage_deadline"] = "99999999999"
+    hub.dossiers[stale_dossier["id"]] = json.dumps(stale_dossier)
+    hub.submissions["note-1"] = json.dumps({**_submission(researcher), "status": "WITNESS_PENDING",
+                                            "url": "https://example.test/a", "claim": "x"})
+    hub.bond_escrow = 100
+    direct_vm.warp("1970-01-01T00:16:40Z")  # 1000s: past closes_at
+    hub.record_attestation("note-1", json.dumps({"status": "ATTESTED"}))
+    assert hub.get_submission("note-1")["status"] == "STALE"
+    assert hub.get_credit(sponsor) == "100"
+    assert hub.get_credit(researcher) == "0"
+
+    # UNAVAILABLE: the researcher's own chosen source returned a temporary status.
+    direct_vm.warp("1970-01-01T00:00:01Z")
+    unavailable_dossier = _base_dossier(sponsor, researcher)
+    unavailable_dossier["id"] = "noema-stateful-2"
+    unavailable_dossier["closes_at"] = "99999999999"
+    unavailable_dossier["active_ids"] = ["note-2"]
+    unavailable_dossier["queue"] = ["note-2"]
+    unavailable_dossier["pending_id"] = "note-2"
+    unavailable_dossier["submission_ids"] = ["note-2"]
+    hub.dossiers[unavailable_dossier["id"]] = json.dumps(unavailable_dossier)
+    hub.submissions["note-2"] = json.dumps({**_submission(researcher), "id": "note-2",
+        "dossier_id": "noema-stateful-2", "status": "WITNESS_PENDING",
+        "url": "https://example.test/b", "claim": "y"})
+    hub.bond_escrow = int(hub.bond_escrow) + 100
+    hub.record_attestation("note-2", json.dumps({"status": "UNAVAILABLE"}))
+    assert hub.get_submission("note-2")["status"] == "RETRYABLE"
+    assert hub.get_credit(sponsor) == "200"
+    assert hub.get_credit(researcher) == "0"
+
+
+def test_attestation_valid_treats_content_addressed_and_direct_response_as_distinct(
+    direct_deploy,
+):
+    """transport_origin_verified must never be conflated with content-addressed
+    assurance: each provenance_status is accepted only with its own matching
+    transport_origin_verified value, never the other's."""
+    hub = direct_deploy(HUB, "", "", True)
+    valid = {"status": "ATTESTED", "claim_digest": "", "requested_url": "https://example.test/a",
+             "verified_response_origin": "https://example.test", "content_digest": "a" * 64,
+             "support_digest": "b" * 64, "support_quote": "quote"}
+
+    def check(**overrides):
+        result = {**valid, **overrides}
+        result["claim_digest"] = hub._instance._attestation_valid.__globals__["_sha"]("claim")
+        return hub._instance._attestation_valid(result, "https://example.test/a", "claim")
+
+    assert check(provenance_status="VERIFIED_DIRECT_RESPONSE", transport_origin_verified=True) is True
+    assert check(provenance_status="VERIFIED_CONTENT_ADDRESSED_ORIGIN", transport_origin_verified=False) is True
+    # Neither may borrow the other's transport_origin_verified value.
+    assert check(provenance_status="VERIFIED_DIRECT_RESPONSE", transport_origin_verified=False) is False
+    assert check(provenance_status="VERIFIED_CONTENT_ADDRESSED_ORIGIN", transport_origin_verified=True) is False
+    assert check(provenance_status="UNVERIFIED_RESPONSE_ORIGIN", transport_origin_verified=True) is False

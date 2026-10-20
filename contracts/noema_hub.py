@@ -343,11 +343,21 @@ class NoemaHub(gl.Contract):
             dossier["position_b"], dossier["rules_root"], _json(dossier["evidence"]), candidate_id)
 
     def _attestation_valid(self, result, url, claim):
+        # Two distinct provenance assurances are each independently sufficient,
+        # and must stay distinct rather than being collapsed into one boolean:
+        # VERIFIED_DIRECT_RESPONSE means the transport layer itself was
+        # authenticated (transport_origin_verified is True); VERIFIED_CONTENT_
+        # ADDRESSED_ORIGIN means transport was never observed, but the requested
+        # path is itself an immutable, content-addressed object identity.
+        # Neither ever proves publisher identity or publication time.
+        provenance_status = result.get("provenance_status")
+        provenance_ok = (
+            (provenance_status == "VERIFIED_DIRECT_RESPONSE" and result.get("transport_origin_verified") is True) or
+            (provenance_status == "VERIFIED_CONTENT_ADDRESSED_ORIGIN" and result.get("transport_origin_verified") is False))
         return (isinstance(result, dict) and result.get("status") == "ATTESTED"
             and result.get("claim_digest") == _sha(claim.strip())
             and isinstance(result.get("requested_url"), str) and result.get("requested_url").startswith("https://")
-            and result.get("transport_origin_verified") is True
-            and result.get("provenance_status") in ("VERIFIED_DIRECT_RESPONSE", "VERIFIED_CONTENT_ADDRESSED_ORIGIN")
+            and provenance_ok
             and isinstance(result.get("verified_response_origin"), str)
             and bool(result.get("verified_response_origin"))
             and re.fullmatch(r"[0-9a-f]{64}", str(result.get("content_digest", ""))) is not None
@@ -417,6 +427,11 @@ class NoemaHub(gl.Contract):
             dossier = self._dossier(dossier_id)
             if dossier["status"] != "BASELINE_WITNESSING" or dossier["pending_id"] != request_id:
                 raise gl.vm.UserError("[EXPECTED] stale baseline callback")
+            # expire_stage() becomes callable at this exact boundary (`now >= deadline`);
+            # a late callback and a timeout expiry must never both be able to finalize
+            # the same stage, so the callback path closes here first.
+            if _now() >= int(dossier["stage_deadline"]):
+                raise gl.vm.UserError("[EXPECTED] semantic stage deadline elapsed; call expire_stage")
             cursor = int(cursor_text)
             seed = dossier["baseline_queue"][cursor]
             if not self._attestation_valid(result, seed["url"], seed["claim"]):
@@ -438,16 +453,28 @@ class NoemaHub(gl.Contract):
         dossier = self._dossier(submission["dossier_id"])
         if submission["status"] != "WITNESS_PENDING" or dossier["pending_id"] != request_id:
             raise gl.vm.UserError("[EXPECTED] stale attestation callback")
+        # Mutually exclusive with expire_stage(): once the stage deadline has
+        # elapsed, only the timeout path may finalize this submission, never a
+        # late-arriving callback racing against it.
+        if _now() >= int(dossier["stage_deadline"]):
+            raise gl.vm.UserError("[EXPECTED] semantic stage deadline elapsed; call expire_stage")
         if not dossier["queue"] or dossier["queue"][0] != submission["id"]:
             raise gl.vm.UserError("[EXPECTED] FIFO attestation order violation")
         submission["attestation"] = result
         if dossier["status"] != "OPEN" or _now() >= int(dossier["closes_at"]):
+            # The researcher chose both the URL and the disclosure timing with
+            # full knowledge of closes_at; a disclosure that only resolves after
+            # the dossier closes is attributable to that choice, not an outage.
             submission["status"] = "STALE"
-            self._release_bond(submission, submission["researcher"])
+            self._release_bond(submission, dossier["sponsor"])
             self._finish_submission(dossier, submission)
         elif result.get("status") == "UNAVAILABLE":
+            # The researcher also chose the source URL; a source they control
+            # returning a temporary-looking HTTP status is unfalsifiable from
+            # chain state and must not be a zero-cost way to burn through the
+            # dossier's bounded lifetime-submission capacity.
             submission["status"] = "RETRYABLE"
-            self._release_bond(submission, submission["researcher"])
+            self._release_bond(submission, dossier["sponsor"])
             self._finish_submission(dossier, submission)
         elif not self._attestation_valid(result, submission["url"], submission["claim"]):
             submission["status"] = "REJECTED"
@@ -487,6 +514,8 @@ class NoemaHub(gl.Contract):
             dossier = self._dossier(request_id.split(":", 1)[1])
             if dossier["status"] != "BASELINE_DECISION" or dossier["pending_id"] != request_id:
                 raise gl.vm.UserError("[EXPECTED] stale baseline verdict")
+            if _now() >= int(dossier["stage_deadline"]):
+                raise gl.vm.UserError("[EXPECTED] semantic stage deadline elapsed; call expire_stage")
             if result.get("manifest_root") != dossier["manifest_root"]:
                 raise gl.vm.UserError("[EXPECTED] baseline manifest root mismatch")
             dossier["pending_id"] = ""
@@ -501,6 +530,12 @@ class NoemaHub(gl.Contract):
         dossier = self._dossier(submission["dossier_id"])
         if submission["status"] != "VERDICT_PENDING" or dossier["pending_id"] != request_id:
             raise gl.vm.UserError("[EXPECTED] stale verdict callback")
+        # A verdict callback and expire_stage() must never both be able to
+        # finalize the same submission: once the deadline has elapsed, only
+        # the timeout path may act, so a late decisive verdict can never race
+        # an expiry rollback for the same bond and reward.
+        if _now() >= int(dossier["stage_deadline"]):
+            raise gl.vm.UserError("[EXPECTED] semantic stage deadline elapsed; call expire_stage")
         if not dossier["queue"] or dossier["queue"][0] != submission["id"]:
             raise gl.vm.UserError("[EXPECTED] FIFO verdict order violation")
         if result.get("rules_root") != dossier["rules_root"]:
@@ -666,6 +701,17 @@ class NoemaHub(gl.Contract):
         dossier = self._dossier(dossier_id)
         if dossier["status"] not in ("OPEN", "BASELINE_WITNESSING", "BASELINE_DECISION") or _now() < int(dossier["closes_at"]):
             raise gl.vm.UserError("[EXPECTED] dossier is not expired")
+        # The research-admission deadline (closes_at) is distinct from an
+        # in-flight worker's own adjudication deadline (stage_deadline). A
+        # disclosed, already-queued submission may still be legitimately
+        # witnessed or resolved after closes_at; refunding the sponsor out
+        # from under that submission would let a race decide its outcome
+        # instead of its own evidence. Require that stage to finish or
+        # expire_stage() it first.
+        pending_id = dossier.get("pending_id", "")
+        stage_deadline = int(dossier.get("stage_deadline", "0") or 0)
+        if pending_id and _now() < stage_deadline:
+            raise gl.vm.UserError("[EXPECTED] in-flight adjudication must resolve or expire before dossier closure")
         self._close_refund(dossier, "DEADLINE_ELAPSED")
 
     @gl.public.write

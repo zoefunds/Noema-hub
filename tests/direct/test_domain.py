@@ -240,7 +240,7 @@ def test_source_witness_fails_closed_when_origin_or_redirect_cannot_be_authentic
     witness = (Path(__file__).parents[2] / "contracts" / "source_witness.py").read_text()
     assert '"UNVERIFIED_RESPONSE_ORIGIN"' in witness
     assert '"UNSAFE_REDIRECT"' in witness
-    assert "if not origin_verified" in witness
+    assert "if not origin_admissible" in witness
     assert '"status": "REJECTED"' in witness
 
 
