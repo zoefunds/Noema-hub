@@ -12,7 +12,21 @@ npm install
 npm run ci
 ```
 
-The current local release check passed 55 direct contract tests, 4 sponsor-key safety tests, and 13 frontend tests, plus TypeScript checking, the optimized frontend build, GenVM linting of all three contracts, `pip check`, and dependency audits with no known vulnerabilities. Coverage includes complete-body inspection past the former 24,000-character limit; strict literal-boolean admissibility parsing; rejected redirects, unsupported publishers/origins, contradictory evidence, malformed replies, and prompt injection; frozen sponsor rules and FIFO handling; conflicting-evidence consensus; deadline rollback; forged/mismatched receipts; and stateful receipt replay and duplicate-credit rejection.
+The current local release check passed 64 direct contract tests, 4 sponsor-key safety tests, and 13 frontend tests, plus TypeScript checking, the optimized frontend build, GenVM linting of all three contracts, `pip check`, and dependency audits with no known vulnerabilities. Coverage includes complete-body inspection past the former 24,000-character limit; strict literal-boolean admissibility parsing; rejected redirects, unsupported publishers/origins, contradictory evidence, malformed replies, and prompt injection; frozen sponsor rules and FIFO handling; conflicting-evidence consensus; deadline rollback; forged/mismatched receipts; and stateful receipt replay and duplicate-credit rejection.
+
+Nine stateful tests in `tests/direct/test_stateful_security.py` were added to close gaps the prior suite left between "the helper function behaves correctly in isolation" and "the deployed contract method behaves correctly end to end":
+
+- **All four `reconcile_withdrawal` outcomes are now run through the live contract method**, not just the `_payout_receipt_outcome` helper. Previously only `FAILED` (recredit) and its replay were exercised statefully:
+  - `test_delivered_receipt_settles_withdrawal_without_recrediting` — a genuinely successful payout clears `pending_outbound` and the withdrawal is marked `DELIVERED` without ever touching `credits` (proves the happy path cannot double-pay).
+  - `test_forged_or_mismatched_receipt_is_rejected_and_leaves_state_unchanged` — a receipt pair that fails consensus linkage (`INVALID`) reverts and leaves the withdrawal `PENDING`, `pending_outbound` untouched, and `consumed_payout_receipts` unmarked, so a legitimate retry is still possible.
+  - `test_unfinalized_receipt_is_rejected_without_mutating_state` — a receipt whose child has not finalized (`PENDING`) reverts without mutating any state.
+  - `test_unavailable_rpc_lookup_is_rejected_without_mutating_state` — a StudioNet RPC read failure (`UNAVAILABLE`) is rejected as retryable rather than silently treated as settled.
+- **`withdraw()` itself is now exercised statefully**, not just inspected as source text:
+  - `test_withdraw_blocks_a_second_pending_withdrawal_for_the_same_recipient` — a second `withdraw()` call while one is still unreconciled reverts, and the newly-arrived credit is left untouched for the next withdrawal.
+  - `test_withdraw_refuses_to_send_when_hub_is_underfunded` — the solvency guard reverts before any external value message is emitted when Hub balance cannot cover total liabilities.
+- **FIFO reward fairness is now enforced against the live contract, not just grepped for in source**:
+  - `test_out_of_order_attestation_callback_violates_fifo_and_reverts` and `test_out_of_order_verdict_callback_violates_fifo_and_reverts` — a callback for anything but the queue head is rejected, and no bond or reward moves as a result.
+- **`test_accounting_invariant_holds_through_a_full_loss_and_recapitalization`** runs the full economically consequential sequence end to end: a real backing loss on a failed payout flips `accounting_ok` to `false` and reports the exact `payout_recovery_required`, and `recapitalize_payouts` restores `accounting_ok` to `true` once the shortfall is covered — demonstrating the invariant is load-bearing, not cosmetic.
 
 GitHub Actions is configured in [`.github/workflows/quality.yml`](../.github/workflows/quality.yml). No hosted-green claim is made: on 2026-10-20 GitHub stopped the release-evidence run [`39456409579`](https://github.com/zoefunds/Noema-hub/actions/runs/39456409579) before either job executed because of an owner-controlled billing authorization failure. The workflow-equivalent checks above passed locally; hosted CI must be rerun after the account billing issue is resolved.
 
