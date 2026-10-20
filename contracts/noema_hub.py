@@ -275,7 +275,9 @@ class NoemaHub(gl.Contract):
         self.submissions[value["id"]] = _json(value)
 
     def _credit(self, address, amount):
-        target = Address(address)
+        # Internal callers may already hold the SDK Address value (for example
+        # payout reconciliation). Re-wrapping it is not supported by the SDK.
+        target = address if isinstance(address, Address) else Address(address)
         current = int(self.credits[target]) if target in self.credits else 0
         self.credits[target] = u256(current + amount)
         self.claimable = u256(int(self.claimable) + amount)
