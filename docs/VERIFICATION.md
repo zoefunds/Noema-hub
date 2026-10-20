@@ -37,6 +37,23 @@ A second review round closed four further issues, each with its own stateful tes
 
 GitHub Actions is configured in [`.github/workflows/quality.yml`](../.github/workflows/quality.yml). No hosted-green claim is made: on 2026-10-20 GitHub stopped the release-evidence run [`39456409579`](https://github.com/zoefunds/Noema-hub/actions/runs/39456409579) before either job executed because of an owner-controlled billing authorization failure. The workflow-equivalent checks above passed locally; hosted CI must be rerun after the account billing issue is resolved.
 
+### Running hosted CI from a different GitHub account
+
+Because the blocker above is a billing/Actions-minutes problem on one specific account — not anything about the repository, the workflow, or the code — any other GitHub account can run the exact same hosted CI independently and get a real green (or red) result. The workflow needs no secrets, no paid external API, and performs no on-chain writes: both jobs only install public `pip`/`npm` packages and run local checks (lint, the direct-mode contract test suite, frontend tests, typecheck, and the production build). `gltest.config.yaml` points `direct` tests at the StudioNet RPC URL only as config metadata; the direct-mode tests themselves never make a network call.
+
+To run it on another account:
+
+1. **Fork the repository** into that account (GitHub → `Fork`), or add it as a remote and push the branch you want checked to a repository that account owns. Actions runs on the repository that owns the workflow file, not on the original `zoefunds/Noema-hub`.
+2. **Enable Actions on the fork** if GitHub has not already done so automatically: `Settings → Actions → General → Actions permissions`, select "Allow all actions and reusable workflows," and save. A brand-new fork sometimes shows a one-time "Workflows aren't running on this forked repository" banner on the `Actions` tab — click "I understand my workflows, go ahead and enable them."
+3. **Trigger a run.** Any of the following fires `quality.yml` as configured in this repo ([`.github/workflows/quality.yml`](../.github/workflows/quality.yml)):
+   - push a commit to that fork's `main` branch;
+   - open a pull request against any branch in that fork;
+   - or, with no push/PR needed, go to `Actions → Quality → Run workflow` and trigger it manually (`workflow_dispatch` is already enabled in the workflow file) on any branch.
+4. **No configuration, secrets, or `.env` file is required.** All frontend environment variables used in `npm run build`/`npm run typecheck` (`NEXT_PUBLIC_GENLAYER_RPC_URL`, `NEXT_PUBLIC_NOEMA_HUB_ADDRESS`, etc. — see [`.env.example`](../.env.example)) have working fallback defaults in [`frontend/lib/liveProtocol.ts`](../frontend/lib/liveProtocol.ts), and CI does not copy an `.env.local` file; the build succeeds without one.
+5. **Read the result** on that fork's `Actions` tab: two jobs, `contracts` and `interface`, run in parallel and normally finish in one to two minutes each. A green check on both is the same hosted-CI evidence this document could not previously produce on the original account; a red check will show exactly which step failed, with the same logs any `actions/checkout`-based run produces.
+
+This reproduces the identical check this document asks for — it does not require access to, or any changes on, the original `zoefunds/Noema-hub` account.
+
 ## Current source-matched StudioNet release
 
 [`deployments/studionet.json`](../deployments/studionet.json) records a clean StudioNet `61999` deployment from commit `2391ac15d210e8d505cb7bd3c8e08d73788883b3`. The deployer retrieved each deployed contract through GenLayerJS `getContractCode`, required SHA-256 equality with the checked-in source, and checked finalized execution before writing the manifest.
