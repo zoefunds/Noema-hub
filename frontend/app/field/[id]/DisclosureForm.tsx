@@ -19,16 +19,17 @@ export function DisclosureForm({ dossier }: { dossier: Dossier }) {
       const account = await connectWallet(); const salt = randomSalt();
       const base = { dossierId: dossier.id, url: url.trim(), claim: claim.trim(), salt };
       const commitment = disclosureCommitment(base, HUB_ADDRESS, account);
-      savePending({ ...base, commitment, createdAt: new Date().toISOString() });
+      savePending({ ...base, researcher: account, commitment, status: "PREPARED", createdAt: new Date().toISOString() });
       setNotice("Confirm the sealed disclosure in your wallet…");
       const hash = await submitHubWrite(account, "seal_disclosure", [dossier.id, commitment], BigInt(dossier.bond_atto));
+      updatePending(commitment, { sealTx: hash, status: "SEAL_SUBMITTED" });
       setNotice(`Seal submitted (${hash.slice(0, 12)}…). Waiting for finality…`);
       await waitForFinalization(hash);
       const submissionId = await getSubmissionForCommitment(commitment, false);
       if (!submissionId) throw new Error("Seal finalized but the Hub did not record the commitment.");
-      updatePending(commitment, { submissionId });
-      setNotice(`Seal finalized as ${submissionId}. Your claim and salt remain only in this browser. Open Vault to reveal. Explorer: ${EXPLORER_URL}/tx/${hash}`);
+      updatePending(commitment, { submissionId, status: "SEALED" });
+      setNotice(`Seal finalized as ${submissionId}. Export its recovery file from Vault before revealing. Explorer: ${EXPLORER_URL}/tx/${hash}`);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not prepare disclosure."); }
   }
-  return <form className="submission-box" onSubmit={prepare}><div className="eyebrow">Research disclosure</div><h3>Bring the record that settles it.</h3><p>The claim and source stay local until your on-chain seal finalizes.</p><button type="button" className="autofill-dark" onClick={loadVerifiedEvidence}>Load real license evidence ↘</button><label htmlFor="url">Public HTTPS source</label><input id="url" type="url" required value={url} onChange={(e) => setUrl(e.target.value)} /><label htmlFor="claim">Exact fact established</label><textarea id="claim" required value={claim} onChange={(e) => setClaim(e.target.value)} /><button type="submit">Prepare sealed disclosure</button>{notice && <p role="status" className="manifest">{notice}</p>}</form>;
+  return <form className="submission-box" onSubmit={prepare}><div className="eyebrow">Research disclosure</div><h3>Bring the record that settles it.</h3><p>The claim and source stay local until your on-chain seal finalizes. A fetched response authenticates returned bytes and transport origin only; it does not prove publisher identity or publication time.</p><button type="button" className="autofill-dark" onClick={loadVerifiedEvidence}>Load real license evidence ↘</button><label htmlFor="url">Public HTTPS source</label><input id="url" type="url" required value={url} onChange={(e) => setUrl(e.target.value)} /><label htmlFor="claim">Exact fact established</label><textarea id="claim" required value={claim} onChange={(e) => setClaim(e.target.value)} /><button type="submit">Prepare sealed disclosure</button>{notice && <p role="status" className="manifest">{notice}</p>}</form>;
 }

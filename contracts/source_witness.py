@@ -97,23 +97,10 @@ def _normalize(raw):
         raise gl.vm.UserError("[LLM_ERROR] witness response must be an object")
     result = {}
     for field in FIELDS:
-        value = raw.get(field, False)
-        if type(value) is bool:
-            result[field] = value
-        elif isinstance(value, dict):
-            nested = next((value[key] for key in ("value", "result", "pass", "passed", "valid", "answer") if key in value), False)
-            if type(nested) is bool:
-                result[field] = nested
-            else:
-                text = str(nested).strip().lower()
-                result[field] = text.startswith(("true", "yes", "pass", "valid", "supported", "compliant", "aligned", "consistent"))
-        elif isinstance(value, str):
-            text = value.strip().lower()
-            result[field] = text.startswith(("true", "yes", "pass", "valid", "supported", "compliant", "aligned", "consistent"))
-        elif isinstance(value, int):
-            result[field] = value == 1
-        else:
-            result[field] = False
+        value = raw.get(field)
+        if type(value) is not bool:
+            raise gl.vm.UserError(f"[LLM_ERROR] {field} must be a literal boolean")
+        result[field] = value
     # The six bounded checks are authoritative. Derive the status rather than
     # trusting a model-selected label that may vary while expressing the same result.
     result["status"] = "ATTESTED" if all(result[key] for key in FIELDS) else "REJECTED"

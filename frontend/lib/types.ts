@@ -46,7 +46,10 @@ export type Dossier = {
 
 export type PendingDisclosure = {
   dossierId: string;
+  researcher: string;
   submissionId?: string;
+  sealTx?: string;
+  status: "PREPARED" | "SEAL_SUBMITTED" | "SEALED" | "REVEAL_SUBMITTED";
   url: string;
   claim: string;
   salt: string;

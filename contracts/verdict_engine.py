@@ -25,7 +25,17 @@ def _address(value):
     return value
 
 
-def _normalize(raw, valid_ids):
+def _manifest_commitment(manifest):
+    return [{"id": i["id"], "kind": i["kind"], "requested_url": i["requested_url"],
+             "requested_origin": i["requested_origin"], "claim_digest": i["claim_digest"],
+             "content_digest": i["content_digest"], "support_digest": i["support_digest"],
+             "source_size": i["source_size"], "http_status": i["http_status"],
+             "verified_response_origin": i["verified_response_origin"],
+             "transport_origin_verified": i["transport_origin_verified"],
+             "provenance_status": i["provenance_status"]} for i in manifest]
+
+
+def _normalize(raw, evidence_by_id):
     if isinstance(raw, str):
         raw = json.loads(raw)
     if not isinstance(raw, dict):
@@ -38,20 +48,26 @@ def _normalize(raw, valid_ids):
     ids = raw.get("decisive_ids", raw.get("decisive_evidence_ids", []))
     if isinstance(ids, str):
         ids = [ids]
-    ids = sorted(set(i for i in ids if isinstance(i, str) and i in valid_ids)) if isinstance(ids, list) else []
+    ids = sorted(set(i for i in ids if isinstance(i, str) and i in evidence_by_id)) if isinstance(ids, list) else []
     if len(ids) > MAX_DECISIVE_IDS:
         raise gl.vm.UserError("[LLM_ERROR] decisive evidence limit exceeded")
     if outcome == "UNRESOLVED" or not ids:
         outcome, ids = "UNRESOLVED", []
     sufficient = outcome != "UNRESOLVED"
-    basis = ("The disclosed rule is not established by the attested evidence."
-             if not sufficient else f"{outcome} is established by attested evidence: {','.join(ids)}.")
+    explanation = raw.get("basis", "")
+    if not isinstance(explanation, str) or not 1 <= len(explanation.strip()) <= 600:
+        raise gl.vm.UserError("[LLM_ERROR] a bounded evidence-grounded basis is required")
+    explanation = explanation.strip()
+    citations = ";".join(f"{item_id}:{evidence_by_id[item_id]['support_digest']}" for item_id in ids)
+    basis = explanation if not sufficient else f"{explanation} Decisive authenticated supports: {citations}."
+    if len(basis) > 1600:
+        raise gl.vm.UserError("[LLM_ERROR] closure basis limit exceeded")
     return {"outcome": outcome, "sufficient": sufficient, "decisive_ids": ids,
             "basis": basis, "basis_digest": _sha(basis)}
 
 
 def _decision(question, rule, position_a, position_b, rules_root, manifest, manifest_root, label):
-    valid_ids = {item["id"] for item in manifest}
+    evidence_by_id = {item["id"]: item for item in manifest}
     def leader_fn():
         prompt = (
             "NOEMA_VERDICT_ENGINE_V3 " + label + ". Apply the frozen decision rule only to authenticated source "
@@ -59,19 +75,20 @@ def _decision(question, rule, position_a, position_b, rules_root, manifest, mani
             "If authenticated sources conflict on a fact required by the rule, return UNRESOLVED. Never infer missing "
             "facts or choose a likely side. Return UNRESOLVED "
             "unless a position is strictly established. Name every evidence id necessary for the result and no irrelevant "
-            "id; at most 12 ids are permitted. Return exactly JSON shaped as "
-            '{"outcome":"POSITION_A|POSITION_B|UNRESOLVED","decisive_ids":["evidence-id"]}. '
+            "id; at most 12 ids are permitted. Supply a concise basis explaining how the cited verbatim support "
+            "passages satisfy or fail the frozen rule; do not rely on claim text. Return exactly JSON shaped as "
+            '{"outcome":"POSITION_A|POSITION_B|UNRESOLVED","decisive_ids":["evidence-id"],"basis":"bounded evidence-grounded explanation"}. '
             "Use an empty decisive_ids array only for UNRESOLVED. DATA=" + _json({"question": question,
             "rule": rule, "position_a": position_a, "position_b": position_b, "rules_root": rules_root,
             "manifest_root": manifest_root,
             "attested_evidence": manifest}))
-        return _normalize(gl.nondet.exec_prompt(prompt, response_format="json"), valid_ids)
+        return _normalize(gl.nondet.exec_prompt(prompt, response_format="json"), evidence_by_id)
     def validator_fn(leader_result):
         if not isinstance(leader_result, gl.vm.Return):
             return False
         try:
             own = leader_fn()
-            proposed = _normalize(leader_result.calldata, valid_ids)
+            proposed = _normalize(leader_result.calldata, evidence_by_id)
             return all(own[key] == proposed[key] for key in
                        ("outcome", "sufficient", "decisive_ids", "basis_digest"))
         except Exception:
@@ -81,19 +98,13 @@ def _decision(question, rule, position_a, position_b, rules_root, manifest, mani
 
 def _decide(question, rule, position_a, position_b, rules_root, manifest_json, candidate_id=""):
     manifest = json.loads(manifest_json)
-    manifest_root = _sha(_json({"rules_root": rules_root, "evidence": [
-        {"id": i["id"], "claim_digest": i["claim_digest"], "content_digest": i["content_digest"],
-         "support_digest": i["support_digest"], "verified_response_origin": i["verified_response_origin"]}
-        for i in manifest]}))
+    manifest_root = _sha(_json({"rules_root": rules_root, "evidence": _manifest_commitment(manifest)}))
     result = _decision(question, rule, position_a, position_b, rules_root, manifest, manifest_root, "FULL_MANIFEST")
     if candidate_id:
         if candidate_id not in {item["id"] for item in manifest}:
             raise gl.vm.UserError("[EXPECTED] candidate absent from manifest")
         prior = [item for item in manifest if item["id"] != candidate_id]
-        prior_root = _sha(_json({"rules_root": rules_root, "evidence": [
-            {"id": i["id"], "claim_digest": i["claim_digest"], "content_digest": i["content_digest"],
-             "support_digest": i["support_digest"], "verified_response_origin": i["verified_response_origin"]}
-            for i in prior]}))
+        prior_root = _sha(_json({"rules_root": rules_root, "evidence": _manifest_commitment(prior)}))
         counterfactual = _decision(question, rule, position_a, position_b, rules_root, prior, prior_root,
                                    "COUNTERFACTUAL_WITHOUT_CURRENT_CANDIDATE")
         result["counterfactual_outcome"] = counterfactual["outcome"]

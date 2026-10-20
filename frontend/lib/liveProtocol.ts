@@ -155,7 +155,7 @@ export function formatGen(atto: string): string {
   return `${whole}${fraction ? `.${fraction}` : ""}`;
 }
 export function randomSalt(): string { const bytes = crypto.getRandomValues(new Uint8Array(32)); return Array.from(bytes, (v) => v.toString(16).padStart(2, "0")).join(""); }
-export function disclosureCommitment(input: Omit<PendingDisclosure, "commitment" | "createdAt" | "submissionId">, hub: string, researcher: string): string {
+export function disclosureCommitment(input: Omit<PendingDisclosure, "commitment" | "createdAt" | "submissionId" | "researcher" | "sealTx" | "status">, hub: string, researcher: string): string {
   const packet = JSON.stringify({ chain_id: "61999", claim: input.claim.trim(), dossier_id: input.dossierId,
     domain: "NOEMA_DISCLOSURE_V1", hub: hub.toLowerCase(), researcher: researcher.toLowerCase(), salt: input.salt, url: input.url.trim() });
   return sha256(stringToHex(packet)).slice(2);
@@ -164,6 +164,12 @@ export function loadPending(): PendingDisclosure[] { if (typeof window === "unde
 export function savePending(item: PendingDisclosure): void { const prior = loadPending().filter((x) => x.commitment !== item.commitment); localStorage.setItem(storageKey, JSON.stringify([item, ...prior].slice(0, 24))); }
 export function updatePending(commitment: string, updates: Partial<PendingDisclosure>): void { localStorage.setItem(storageKey, JSON.stringify(loadPending().map((x) => x.commitment === commitment ? { ...x, ...updates } : x))); }
 export function removePending(commitment: string): void { localStorage.setItem(storageKey, JSON.stringify(loadPending().filter((x) => x.commitment !== commitment))); }
+export function exportPendingDisclosure(item: PendingDisclosure): void {
+  const blob = new Blob([JSON.stringify({ format: "NOEMA_PENDING_DISCLOSURE_V1", ...item }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
+  anchor.href = url; anchor.download = `noema-${item.dossierId}-${item.commitment.slice(0, 12)}.json`;
+  anchor.click(); URL.revokeObjectURL(url);
+}
 export function loadPendingPayouts(account?: string): PendingPayout[] {
   if (typeof window === "undefined") return [];
   try { const records: PendingPayout[] = JSON.parse(localStorage.getItem(payoutStorageKey) ?? "[]");

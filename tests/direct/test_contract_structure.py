@@ -7,6 +7,7 @@ ROOT = Path(__file__).parents[2]
 HUB = ROOT / "contracts" / "noema_hub.py"
 WITNESS = ROOT / "contracts" / "source_witness.py"
 ENGINE = ROOT / "contracts" / "verdict_engine.py"
+DEPLOY = ROOT / "deploy" / "deployNoema.ts"
 
 
 def contract_methods(path: Path, class_name: str) -> set[str]:
@@ -19,6 +20,15 @@ def test_hub_exposes_submission_and_economic_lifecycle():
     methods = contract_methods(HUB, "NoemaHub")
     assert {"open_dossier", "seal_disclosure", "disclose", "record_attestation", "record_verdict",
             "expire_disclosure", "expire_stage", "expire_dossier", "withdraw", "get_stats"} <= methods
+
+
+def test_deployer_supplies_every_hub_constructor_argument_including_native_payout_mode():
+    tree = ast.parse(HUB.read_text())
+    contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
+    constructor = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "__init__")
+    assert [arg.arg for arg in constructor.args.args] == ["self", "witness_address", "engine_address", "native_payouts_enabled"]
+    source = DEPLOY.read_text()
+    assert 'deploy(client, "contracts/noema_hub.py", ["", "", enableNativePayouts])' in source
 
 
 def test_unavailable_http_callback_refunds_researcher_bond_and_marks_submission_retryable():

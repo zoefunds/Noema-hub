@@ -4,6 +4,7 @@ import json
 
 HUB = "contracts/noema_hub.py"
 ENGINE = "contracts/verdict_engine.py"
+WITNESS = "contracts/source_witness.py"
 
 
 def _address(byte: str) -> str:
@@ -42,11 +43,30 @@ def _submission(researcher: str, status: str = "VERDICT_PENDING") -> dict:
 def _evidence(evidence_id: str) -> dict:
     return {
         "id": evidence_id,
+        "kind": "RESEARCH",
+        "requested_url": "https://example.test/source",
+        "requested_origin": "https://example.test",
         "claim_digest": "1" * 64,
         "content_digest": "2" * 64,
         "support_digest": "3" * 64,
+        "source_size": 128,
+        "http_status": 200,
         "verified_response_origin": "https://example.test",
+        "transport_origin_verified": True,
+        "provenance_status": "VERIFIED_DIRECT_RESPONSE",
     }
+
+
+def test_witness_rejects_non_literal_values_for_every_admissibility_boolean(direct_deploy):
+    witness = direct_deploy(WITNESS, _address("9"))
+    normalize = witness._instance.attest.__globals__["_normalize"]
+    valid = {name: True for name in witness._instance.attest.__globals__["FIELDS"]}
+    valid.update({"basis": "All checks passed.", "support_quote": "verbatim"})
+    assert normalize(valid)["status"] == "ATTESTED"
+    for field in witness._instance.attest.__globals__["FIELDS"]:
+        for malformed in (1, "true", {"value": True}):
+            with __import__("pytest").raises(Exception, match="literal boolean"):
+                normalize({**valid, field: malformed})
 
 
 def test_conflicting_authenticated_quotes_execute_consensus_as_unresolved(
@@ -60,7 +80,8 @@ def test_conflicting_authenticated_quotes_execute_consensus_as_unresolved(
         {**_evidence("evidence-blue"), "support_quote": "The beacon is BLUE."},
     ]
     direct_vm.mock_llm("NOEMA_VERDICT_ENGINE_V3", json.dumps({
-        "outcome": "UNRESOLVED", "decisive_ids": []
+        "outcome": "UNRESOLVED", "decisive_ids": [],
+        "basis": "The authenticated support passages conflict on the beacon state required by the rule."
     }))
     result = decide(
         "What is the beacon state?",

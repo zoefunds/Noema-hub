@@ -5,9 +5,11 @@
     "test:contracts": "python3 -m pytest tests/direct -q",
     "test:ui": "npm --prefix frontend test",
     "test:sponsor-key": "node --import tsx --test tests/sponsorKey.test.ts",
+    "lint:genvm": "genvm-lint lint contracts/noema_hub.py && genvm-lint lint contracts/source_witness.py && genvm-lint lint contracts/verdict_engine.py",
+    "check:dependencies": "python3 -m pip check && npm audit --audit-level=high && npm --prefix frontend audit --audit-level=high",
     "typecheck": "npm --prefix frontend run typecheck",
     "build": "npm --prefix frontend run build",
-    "ci": "npm run test:contracts && npm run test:sponsor-key && npm run test:ui && npm run typecheck && npm run build",
+    "ci": "npm run lint:genvm && npm run test:contracts && npm run test:sponsor-key && npm run test:ui && npm run typecheck && npm run build && npm run check:dependencies",
     "e2e:studionet": "node --import tsx run-studionet-e2e.mjs"
   },
   "devDependencies": {

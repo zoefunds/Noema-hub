@@ -68,9 +68,13 @@ def _commitment(hub, dossier_id, researcher, url, claim, salt):
 
 def _manifest_root(items, rules_root):
     return _sha(_json({"rules_root": rules_root, "evidence": [
-        {"id": i["id"], "claim_digest": i["claim_digest"],
+        {"id": i["id"], "kind": i["kind"], "requested_url": i["requested_url"],
+         "requested_origin": i["requested_origin"], "claim_digest": i["claim_digest"],
          "content_digest": i["content_digest"], "support_digest": i["support_digest"],
-         "verified_response_origin": i["verified_response_origin"]} for i in items]}))
+         "source_size": i["source_size"], "http_status": i["http_status"],
+         "verified_response_origin": i["verified_response_origin"],
+         "transport_origin_verified": i["transport_origin_verified"],
+         "provenance_status": i["provenance_status"]} for i in items]}))
 
 
 def _tx_id(transaction):
