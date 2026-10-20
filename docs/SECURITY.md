@@ -24,6 +24,8 @@
 - Rewards and returned bonds first become pull credits; a recipient must explicitly call `withdraw` to initiate the native payout.
 - A recipient cannot overwrite an unresolved withdrawal with another. Pending outbound value remains tracked until exact finalized parent/child receipts are reconciled.
 - A delivered payout is terminal and cannot be claimed a second time. A verified failed child restores the claim but records any backing loss and blocks further payouts until recapitalization.
+- Each finalized parent/child receipt pair is consumed once. Replaying it against the same terminal withdrawal or a different pending withdrawal cannot create another credit.
+- Conflicting authenticated support passages cannot produce a decisive payout; consensus remains unresolved and reward escrow remains intact.
 
 ## Prompt injection
 
@@ -48,5 +50,7 @@ All user text, arrays, pages, queues, lifetime records and retained evidence are
 - inspect all three schemas;
 - verify `accounting_ok` and `solvent_ok` before and after an end-to-end flow;
 - verify the finalized outgoing child through canonical StudioNet RPC under validator replay, recipient balance increase, Hub credit readback, single-use receipt pair, and duplicate-withdraw protection before reporting a payout as successful;
+- execute the conflicting-evidence, candidate-timeout, failed-receipt recredit, receipt-replay, and duplicate-credit state-transition tests;
+- exercise a real asynchronous stage timeout and verify exact credit restoration, cleared pending state, and healthy accounting;
 - publish addresses and deployment transaction hashes;
 - never label a transport redirect chain as verified.

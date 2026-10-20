@@ -38,7 +38,7 @@ The one-time worker binding transaction is `0x64ada52b21b3dfaaeca73e61bebe42164f
 Run the fresh-Hub acceptance harness while an unlocked StudioNet researcher account is active:
 
 ```bash
-genlayer account use eventweaver
+genlayer account use <unlocked-funded-account>
 npm run e2e:studionet
 ```
 
@@ -49,6 +49,14 @@ For a deployment signer whose CLI keystore password is unavailable, the runner a
 The current acceptance dossier `noema-1` used immutable first-party OpenAI Codex Git tree and LICENSE objects. Its result was `POSITION_A`; `note-1` was the sole decisive submission and the counterfactual without it was `UNRESOLVED`. The full 10,926-byte LICENSE response was digested and the claim was bound to the exact support quote `Licensed under the Apache License, Version 2.0 (the "License");`. The researcher earned `0.0011 GEN`, including the returned bond. Withdrawal parent `0x0aa20b30de1ee715cfb510b610ce1e7006f9b7a44a6abb7920f0f070738e6550` emitted child `0x68f5b61a30dc46d14d61bf6f6bcbbbc49bfebb94288a7fe9379c27263495ad4f`, finalized with `value_credited=true`, and was reconciled by `0x6c953a16ec5769e95025eeab1f8b35c07cb61708a38e89748f5adbb549a5aa06` as `DELIVERED`. Hub credit changed from `1100000000000000` to zero; the wallet changed from `459599999967045000` to `460699999967045000` atto. Accounting and solvency remained true, and a duplicate withdrawal was rejected. The temporary sponsor's unused `0.002 GEN` was returned separately and its generated key file was removed.
 
 The current transaction-level acceptance proof is [`deployments/studionet-e2e-latest.json`](../deployments/studionet-e2e-latest.json). It is a CLI/GenLayerJS-originated run and demonstrates successful delivery on the current contracts. Historical legacy-contract incidents are kept separately in [`deployments/legacy-withdrawal-failure.json`](../deployments/legacy-withdrawal-failure.json) and are not evidence about this release.
+
+To reproduce the real deadline path without redeploying, activate a funded account and run:
+
+```bash
+NOEMA_TIMEOUT_E2E=1 genlayer deploy
+```
+
+The timeout harness resumes its exact pending dossier after transient RPC failures, refuses to replace the configured StudioNet release, records the emitted child transaction, and writes [`deployments/studionet-timeout-rollback.json`](../deployments/studionet-timeout-rollback.json). It waits for the contract's real 1,800-second deadline; it does not warp local time or shorten the deployed window.
 
 ## Production application checks
 

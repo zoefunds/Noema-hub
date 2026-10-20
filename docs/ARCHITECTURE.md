@@ -70,3 +70,13 @@ This makes worst-case storage and semantic input size calculable:
 The Hub authenticates callback sender addresses. Worker contracts authenticate the configured Hub for every request. Request IDs are single-use in workers, and Hub-side status checks reject late, duplicate or wrong-stage callbacks. Component addresses are immutable after one-time bootstrap.
 
 Any caller can execute `expire_stage` after its deadline. Baseline timeouts refund the sponsor. Research-stage timeouts refund the researcher, clear the pending slot, and continue FIFO processing. If judgment timed out after tentative append, the candidate is removed and the prior manifest root is restored first.
+
+## Payout finality and recovery
+
+`withdraw` moves one recipient's credit into a serialized pending-outbound record before emitting the external value message. Neither the browser nor the project-controlled Vercel receipt projection can settle that record. `reconcile_withdrawal` independently retrieves the exact parent and child transactions from canonical StudioNet RPC under validator replay and requires finalized status, exact linkage, Hub sender, recipient, amount, withdrawal calldata, creation second, and boolean `value_credited`.
+
+A delivered child consumes its parent/child receipt pair and terminates the withdrawal. A finalized failed child consumes the same pair, restores credit once, and records any newly realized backing deficit. The recipient cannot initiate another payout while an earlier outbound value remains pending, and a consumed pair cannot settle another withdrawal. This keeps chain delivery evidence and Hub accounting in one authenticated state transition.
+
+## Executable assurance
+
+Direct contract tests execute the VerdictEngine leader and validator on conflicting authenticated support passages, then execute the Hub's economically non-decisive callback. Separate stateful tests execute candidate rollback after a verdict-stage deadline and failed-child reconciliation twice to prove single recredit and receipt replay rejection. The public-network record complements these deterministic tests with an actual asynchronous baseline child that remained pending through the full 1,800-second StudioNet window and was recovered by `expire_stage`.
