@@ -91,9 +91,23 @@ def test_conflicting_authenticated_quotes_execute_consensus_as_unresolved(
     assert result["outcome"] == "UNRESOLVED"
     assert result["decisive_ids"] == []
     assert result["contribution_required"] is False
+    assert "frozen rule" in result["basis"]
+    assert result["manifest_root"] in result["basis"]
     # The validator re-executes the same source-bound prompt and must agree.
     assert direct_vm.run_validator(index=-2) is True
     assert direct_vm.run_validator(index=-1) is True
+
+
+def test_resolved_basis_is_deterministically_bound_to_authenticated_support(direct_deploy):
+    engine = direct_deploy(ENGINE, _address("9"))
+    normalize = engine._instance.resolve.__globals__["_normalize"]
+    evidence = _evidence("note-1")
+    result = normalize({"outcome": "POSITION_A", "decisive_ids": ["note-1"],
+                        "basis": "untrusted model prose"}, {"note-1": evidence}, "a" * 64, "b" * 64)
+    assert "untrusted model prose" not in result["basis"]
+    assert evidence["verified_response_origin"] in result["basis"]
+    assert evidence["support_digest"] in result["basis"]
+    assert result["basis_digest"] == hashlib.sha256(result["basis"].encode()).hexdigest()
 
 
 def test_conflicting_evidence_consensus_is_economically_non_decisive(

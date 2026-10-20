@@ -35,7 +35,7 @@ def _manifest_commitment(manifest):
              "provenance_status": i["provenance_status"]} for i in manifest]
 
 
-def _normalize(raw, evidence_by_id):
+def _normalize(raw, evidence_by_id, rules_root, manifest_root):
     if isinstance(raw, str):
         raw = json.loads(raw)
     if not isinstance(raw, dict):
@@ -54,12 +54,12 @@ def _normalize(raw, evidence_by_id):
     if outcome == "UNRESOLVED" or not ids:
         outcome, ids = "UNRESOLVED", []
     sufficient = outcome != "UNRESOLVED"
-    explanation = raw.get("basis", "")
-    if not isinstance(explanation, str) or not 1 <= len(explanation.strip()) <= 600:
-        raise gl.vm.UserError("[LLM_ERROR] a bounded evidence-grounded basis is required")
-    explanation = explanation.strip()
-    citations = ";".join(f"{item_id}:{evidence_by_id[item_id]['support_digest']}" for item_id in ids)
-    basis = explanation if not sufficient else f"{explanation} Decisive authenticated supports: {citations}."
+    citations = ";".join(
+        f"{item_id}@{evidence_by_id[item_id]['verified_response_origin']}#{evidence_by_id[item_id]['support_digest']}"
+        for item_id in ids)
+    basis = (f"The frozen rule {rules_root} is not established by authenticated manifest {manifest_root}."
+             if not sufficient else
+             f"{outcome} satisfies frozen rule {rules_root} using decisive authenticated support commitments: {citations}.")
     if len(basis) > 1600:
         raise gl.vm.UserError("[LLM_ERROR] closure basis limit exceeded")
     return {"outcome": outcome, "sufficient": sufficient, "decisive_ids": ids,
@@ -75,20 +75,20 @@ def _decision(question, rule, position_a, position_b, rules_root, manifest, mani
             "If authenticated sources conflict on a fact required by the rule, return UNRESOLVED. Never infer missing "
             "facts or choose a likely side. Return UNRESOLVED "
             "unless a position is strictly established. Name every evidence id necessary for the result and no irrelevant "
-            "id; at most 12 ids are permitted. Supply a concise basis explaining how the cited verbatim support "
-            "passages satisfy or fail the frozen rule; do not rely on claim text. Return exactly JSON shaped as "
-            '{"outcome":"POSITION_A|POSITION_B|UNRESOLVED","decisive_ids":["evidence-id"],"basis":"bounded evidence-grounded explanation"}. '
+            "id; at most 12 ids are permitted. Return exactly JSON shaped as "
+            '{"outcome":"POSITION_A|POSITION_B|UNRESOLVED","decisive_ids":["evidence-id"]}. '
             "Use an empty decisive_ids array only for UNRESOLVED. DATA=" + _json({"question": question,
             "rule": rule, "position_a": position_a, "position_b": position_b, "rules_root": rules_root,
             "manifest_root": manifest_root,
             "attested_evidence": manifest}))
-        return _normalize(gl.nondet.exec_prompt(prompt, response_format="json"), evidence_by_id)
+        return _normalize(gl.nondet.exec_prompt(prompt, response_format="json"), evidence_by_id,
+                          rules_root, manifest_root)
     def validator_fn(leader_result):
         if not isinstance(leader_result, gl.vm.Return):
             return False
         try:
             own = leader_fn()
-            proposed = _normalize(leader_result.calldata, evidence_by_id)
+            proposed = _normalize(leader_result.calldata, evidence_by_id, rules_root, manifest_root)
             return all(own[key] == proposed[key] for key in
                        ("outcome", "sufficient", "decisive_ids", "basis_digest"))
         except Exception:
