@@ -20,6 +20,8 @@ The GitHub Actions workflow is `.github/workflows/quality.yml`. As of 2026-10-20
 
 The production manifest is [`deployments/studionet.json`](../deployments/studionet.json). The deployment script retrieved each contract's source independently with GenLayerJS `getContractCode` and required exact SHA-256 equality before writing the manifest:
 
+The exact matching contract sources are committed in `588ae6f2e25c1afcd2b80115cb57f00990b04e44`.
+
 | Contract | Address | Deployed source SHA-256 | Match |
 |---|---|---|---|
 | NoemaHub | `0x2abC9A485924F7fB43C31875ff6bc865a1827633` | `eea25cd3a88acfe4a343665bff0451213e1a58084d6094669f7dd7c587f75813` | yes |

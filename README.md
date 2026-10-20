@@ -134,7 +134,7 @@ See [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [deploym
 - Hub: `0x2abC9A485924F7fB43C31875ff6bc865a1827633`
 - SourceWitness: `0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C`
 - VerdictEngine: `0xf4917237F5e4e6b990BD6B982B53b8d04f244439`
-- deployed source revision: `WORKTREE-2026-10-20-v4`; exact deployed/local SHA-256 equality was independently read back for all three contracts
+- source-matched release commit: `588ae6f2e25c1afcd2b80115cb57f00990b04e44`; exact deployed/local SHA-256 equality was independently read back for all three contracts
 - verified dossier: `noema-1`
 - decisive disclosure: `note-1`
 - result: `POSITION_A`, `note-1` required, counterfactual `UNRESOLVED`, researcher credited `0.0011 GEN`, accounting invariant true

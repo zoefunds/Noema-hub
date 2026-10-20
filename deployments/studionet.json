@@ -2,7 +2,7 @@
   "product": "Noema",
   "network": "studionet",
   "chainId": 61999,
-  "sourceCommit": "WORKTREE-2026-10-20-v4",
+  "sourceCommit": "588ae6f2e25c1afcd2b80115cb57f00990b04e44",
   "nativePayoutsEnabled": true,
   "rpc": "https://studio.genlayer.com/api",
   "explorer": "https://explorer-studio.genlayer.com",

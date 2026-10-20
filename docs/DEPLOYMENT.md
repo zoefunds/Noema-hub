@@ -31,7 +31,7 @@ The current StudioNet deployment is:
 | SourceWitness | `0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C` | `0xd2ea92dd2a45bb54ea32e725019bec455c3b110e6325517c3be4cdb247ae29b2` |
 | VerdictEngine | `0xf4917237F5e4e6b990BD6B982B53b8d04f244439` | `0x7f9fccce509e8c1d0ea95fade4c0e09390c71344801d2bb198c1cfe8375331d4` |
 
-The one-time worker binding transaction is `0x5f1c06fd215f4bcc5840501810d91a743e96b2a3427b313716043fb20eae6add`. This release enables native payouts and identifies its uncommitted deployment snapshot as `WORKTREE-2026-10-20-v4`; `deployments/studionet.json` records exact local and independently retrieved deployed source SHA-256 values for all three contracts.
+The one-time worker binding transaction is `0x5f1c06fd215f4bcc5840501810d91a743e96b2a3427b313716043fb20eae6add`. This release enables native payouts and its contract sources are committed in `588ae6f2e25c1afcd2b80115cb57f00990b04e44`; `deployments/studionet.json` records exact local and independently retrieved deployed source SHA-256 values for all three contracts.
 
 ## Real-network acceptance test
 

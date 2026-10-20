@@ -4,7 +4,7 @@
   "runStatus": "COMPLETE",
   "startedAt": "2026-10-20T14:45:39.865Z",
   "finishedAt": "2026-10-20T14:59:52.091Z",
-  "sourceCommit": "WORKTREE-2026-10-20-v4",
+  "sourceCommit": "588ae6f2e25c1afcd2b80115cb57f00990b04e44",
   "contracts": {
     "hub": "0x2abC9A485924F7fB43C31875ff6bc865a1827633",
     "witness": "0x33Ae4Aa4D03AA732f67ea83d57580e91D0D2f12C",
