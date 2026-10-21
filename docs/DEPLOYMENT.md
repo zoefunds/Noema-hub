@@ -60,6 +60,12 @@ NOEMA_TIMEOUT_E2E=1 genlayer deploy
 
 The timeout harness resumes its exact pending dossier after transient RPC failures, refuses to replace the configured StudioNet release, records the emitted child transaction, and writes [`deployments/studionet-timeout-rollback.json`](../deployments/studionet-timeout-rollback.json). It waits for the contract's real 1,800-second deadline; it does not warp local time or shorten the deployed window.
 
+For a deployment signer whose CLI keystore password is unavailable, [`run-timeout-e2e.mjs`](../run-timeout-e2e.mjs) runs the same harness directly against `deploy/timeoutRollback.ts` using a throwaway key supplied through `NOEMA_TIMEOUT_DEPLOYER_PRIVATE_KEY` (same pattern as `NOEMA_E2E_DEPLOYER_PRIVATE_KEY` for `run-studionet-e2e.mjs`): enter it through a hidden shell prompt, not a command-line argument. The script deletes it from its own environment immediately, keeps it in process memory only, and never writes it to the deployment manifest or test artifact.
+
+```bash
+NOEMA_TIMEOUT_DEPLOYER_PRIVATE_KEY=<hidden-prompt-value> node --import tsx run-timeout-e2e.mjs
+```
+
 ## Production application checks
 
 The hardened frontend is deployed at [neoma-hub.vercel.app](https://neoma-hub.vercel.app) as Vercel production deployment `dpl_BRL5K2Hqe53yDccYNTHCGKgn8J59`. Its 2026-10-21 `/api/health` response reported chain `61999`, Hub `0xD3B1A426bFD37f69a968e8Db2168edBA4E5854B1`, reachable RPC, and available Hub code. The `neoma-hub` Vercel project's `NEXT_PUBLIC_NOEMA_HUB_ADDRESS`, `NEXT_PUBLIC_NOEMA_WITNESS_ADDRESS`, and `NEXT_PUBLIC_NOEMA_ENGINE_ADDRESS` production environment variables were updated to this release before the deploy, and a browser check of the live site's homepage, dossier listing, `noema-1` detail page, dossier-creation form (including its autofill), protocol notes, and vault page confirmed each renders correctly against the new Hub. The production dossier page visibly renders the frozen rules root, final manifest root, exact support quotes for both evidence records, full source byte counts, and verified content-addressed origin for both the baseline and the decisive disclosure.
