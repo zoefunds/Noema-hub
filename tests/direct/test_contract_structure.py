@@ -47,18 +47,22 @@ def test_unavailable_http_callback_forfeits_bond_and_marks_submission_retryable(
     assert "self._finish_submission(dossier, submission)" in body
 
 
-def test_stale_callback_forfeits_bond_rather_than_refunding_free_late_timing():
-    # The researcher also chooses disclosure timing with full knowledge of
-    # closes_at; a disclosure that only resolves after the dossier closes is
-    # attributable to that choice, not an uncontrollable outage.
-    tree = ast.parse(HUB.read_text())
+def test_queue_delay_past_closes_at_never_forfeits_a_timely_disclosed_bond():
+    # seal_disclosure enforces a full REVEAL_WINDOW buffer before closes_at,
+    # so every successfully disclosed submission was revealed strictly before
+    # it; witnessing it late is FIFO queue delay, never the researcher's
+    # choice, and closes_at must not gate record_attestation's classification
+    # at all -- only genuine outcomes (UNAVAILABLE / rejected / attested) may.
+    hub = HUB.read_text()
+    assert "'STALE'" not in hub and '"STALE"' not in hub
+    tree = ast.parse(hub)
     contract = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "NoemaHub")
     method = next(node for node in contract.body if isinstance(node, ast.FunctionDef) and node.name == "record_attestation")
-    stale = next(node for node in ast.walk(method) if isinstance(node, ast.If)
-                 and ast.unparse(node.test) == "dossier['status'] != 'OPEN' or _now() >= int(dossier['closes_at'])")
-    body = "\n".join(ast.unparse(statement) for statement in stale.body)
-    assert "submission['status'] = 'STALE'" in body
-    assert "self._release_bond(submission, dossier['sponsor'])" in body
+    source = ast.unparse(method)
+    assert "dossier['closes_at']" not in source
+    fifo_guard = source.index("FIFO attestation order violation")
+    unavailable_check = source.index("result.get('status') == 'UNAVAILABLE'")
+    assert fifo_guard < unavailable_check
 
 
 def test_worker_callbacks_and_expire_stage_are_mutually_exclusive_on_deadline():

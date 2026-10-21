@@ -461,14 +461,15 @@ class NoemaHub(gl.Contract):
         if not dossier["queue"] or dossier["queue"][0] != submission["id"]:
             raise gl.vm.UserError("[EXPECTED] FIFO attestation order violation")
         submission["attestation"] = result
-        if dossier["status"] != "OPEN" or _now() >= int(dossier["closes_at"]):
-            # The researcher chose both the URL and the disclosure timing with
-            # full knowledge of closes_at; a disclosure that only resolves after
-            # the dossier closes is attributable to that choice, not an outage.
-            submission["status"] = "STALE"
-            self._release_bond(submission, dossier["sponsor"])
-            self._finish_submission(dossier, submission)
-        elif result.get("status") == "UNAVAILABLE":
+        # closes_at governs new disclosures only: seal_disclosure enforces a
+        # full REVEAL_WINDOW buffer before it, so every successfully disclosed
+        # submission was revealed strictly before closes_at. Witnessing this
+        # already-queued submission after closes_at has elapsed is FIFO queue
+        # delay, not a choice the researcher made, so it must never cost their
+        # bond -- every path that ever moves a dossier away from OPEN also
+        # clears pending_id first, so reaching here with a matching pending_id
+        # already proves the dossier is still OPEN.
+        if result.get("status") == "UNAVAILABLE":
             # The researcher also chose the source URL; a source they control
             # returning a temporary-looking HTTP status is unfalsifiable from
             # chain state and must not be a zero-cost way to burn through the

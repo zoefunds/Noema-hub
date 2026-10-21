@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 
 
 HUB = "contracts/noema_hub.py"
@@ -19,6 +20,9 @@ def _base_dossier(sponsor: str, researcher: str) -> dict:
         "reward_atto": "1000",
         "rules_root": "a" * 64,
         "manifest_root": "b" * 64,
+        "question": "Does the fixture question hold?",
+        "decision_rule": "Resolve A when the fixture evidence establishes it.",
+        "position_a": "A", "position_b": "B", "source_policy": "Accept any fixture source.",
         "evidence": [{"id": "note-1"}],
         "active_ids": ["note-1"],
         "queue": ["note-1"],
@@ -582,50 +586,191 @@ def test_expire_dossier_defers_while_adjudication_is_still_within_its_own_deadli
     assert hub.get_credit(sponsor) == "1000"
 
 
-def test_stale_and_unavailable_callbacks_forfeit_bond_to_sponsor_not_researcher(
-    direct_vm, direct_deploy
-):
-    """Both the researcher's chosen disclosure timing (STALE) and their chosen
-    source (UNAVAILABLE) are fully within their control; neither may be a
-    free way to burn through the dossier's bounded lifetime capacity."""
+def test_unavailable_callback_forfeits_bond_to_sponsor_not_researcher(direct_vm, direct_deploy):
+    """The researcher's own chosen source returning a temporary status is
+    fully within their control; it may not be a free way to burn through
+    the dossier's bounded lifetime capacity."""
     witness, sponsor, researcher = _address("9"), _address("1"), _address("2")
     hub = direct_deploy(HUB, "", "", True)
     hub.witness_address = witness
     hub.configured = True
     direct_vm.sender = bytes.fromhex(witness[2:])
 
-    # STALE: the dossier has already closed, but the adjudication stage has not.
-    stale_dossier = _base_dossier(sponsor, researcher)
-    stale_dossier["closes_at"] = "50"
-    stale_dossier["stage_deadline"] = "99999999999"
-    hub.dossiers[stale_dossier["id"]] = json.dumps(stale_dossier)
+    dossier = _base_dossier(sponsor, researcher)
+    dossier["closes_at"] = "99999999999"
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
     hub.submissions["note-1"] = json.dumps({**_submission(researcher), "status": "WITNESS_PENDING",
                                             "url": "https://example.test/a", "claim": "x"})
     hub.bond_escrow = 100
-    direct_vm.warp("1970-01-01T00:16:40Z")  # 1000s: past closes_at
-    hub.record_attestation("note-1", json.dumps({"status": "ATTESTED"}))
-    assert hub.get_submission("note-1")["status"] == "STALE"
+    hub.record_attestation("note-1", json.dumps({"status": "UNAVAILABLE"}))
+    assert hub.get_submission("note-1")["status"] == "RETRYABLE"
     assert hub.get_credit(sponsor) == "100"
     assert hub.get_credit(researcher) == "0"
+    assert int(hub.bond_escrow) == 0
 
-    # UNAVAILABLE: the researcher's own chosen source returned a temporary status.
-    direct_vm.warp("1970-01-01T00:00:01Z")
-    unavailable_dossier = _base_dossier(sponsor, researcher)
-    unavailable_dossier["id"] = "noema-stateful-2"
-    unavailable_dossier["closes_at"] = "99999999999"
-    unavailable_dossier["active_ids"] = ["note-2"]
-    unavailable_dossier["queue"] = ["note-2"]
-    unavailable_dossier["pending_id"] = "note-2"
-    unavailable_dossier["submission_ids"] = ["note-2"]
-    hub.dossiers[unavailable_dossier["id"]] = json.dumps(unavailable_dossier)
-    hub.submissions["note-2"] = json.dumps({**_submission(researcher), "id": "note-2",
-        "dossier_id": "noema-stateful-2", "status": "WITNESS_PENDING",
-        "url": "https://example.test/b", "claim": "y"})
-    hub.bond_escrow = int(hub.bond_escrow) + 100
-    hub.record_attestation("note-2", json.dumps({"status": "UNAVAILABLE"}))
-    assert hub.get_submission("note-2")["status"] == "RETRYABLE"
-    assert hub.get_credit(sponsor) == "200"
+
+def _attested_result(hub, url, claim):
+    sha = hub._instance.record_attestation.__globals__["_sha"]
+    return {"status": "ATTESTED", "claim_digest": sha(claim.strip()), "requested_url": url,
+            "provenance_status": "VERIFIED_DIRECT_RESPONSE", "transport_origin_verified": True,
+            "verified_response_origin": "https://example.test", "content_digest": "a" * 64,
+            "support_digest": "b" * 64, "support_quote": "verbatim support", "requested_origin": "https://example.test",
+            "requested_host": "example.test", "claim": claim, "observed_at": "2026-10-21T00:00:00+00:00",
+            "http_status": 200, "source_size": 128}
+
+
+def test_queued_submission_witnessed_after_closes_at_is_not_penalized_for_queue_delay(
+    direct_vm, direct_deploy
+):
+    """seal_disclosure guarantees every disclosed submission was revealed
+    strictly before closes_at. Witnessing it late is FIFO queue delay, never
+    the researcher's choice, so it must proceed on its merits -- never be
+    forfeited just because closes_at has numerically elapsed by the time the
+    witness responds."""
+    witness, engine, sponsor, researcher = _address("9"), _address("8"), _address("1"), _address("2")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.witness_address = witness
+    hub.engine_address = engine
+    hub.configured = True
+    direct_vm.sender = bytes.fromhex(witness[2:])
+
+    dossier = _base_dossier(sponsor, researcher)
+    dossier["closes_at"] = "50"  # already elapsed: pure queue-delay scenario
+    dossier["stage_deadline"] = "99999999999"
+    dossier["evidence"] = []  # attestation below appends its own real record for note-1
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions["note-1"] = json.dumps({**_submission(researcher), "status": "WITNESS_PENDING",
+                                            "url": "https://example.test/a", "claim": "the disclosed fact"})
+    hub.bond_escrow = 100
+    direct_vm.warp("1970-01-01T00:16:40Z")  # 1000s: long past closes_at, well before stage_deadline
+
+    hub.record_attestation("note-1", json.dumps(_attested_result(hub, "https://example.test/a", "the disclosed fact")))
+
+    submission = hub.get_submission("note-1")
+    assert submission["status"] == "VERDICT_PENDING"
+    # The bond is still locked pending an actual outcome -- not forfeited,
+    # not refunded early, exactly as if closes_at had never been reached.
+    assert int(hub.bond_escrow) == 100
+    assert hub.get_credit(sponsor) == "0"
     assert hub.get_credit(researcher) == "0"
+    assert [item["id"] for item in hub.get_dossier(dossier["id"])["evidence"]] == ["note-1"]
+
+
+def test_decisive_settlement_still_pays_full_reward_after_closes_at_from_queue_delay(
+    direct_vm, direct_deploy
+):
+    """A submission that was timely disclosed and is actually decisive must be
+    paid in full, even though the queue only reached its verdict after
+    closes_at -- the reward depends on the evidence, never on queue timing."""
+    sponsor, researcher, engine = _address("1"), _address("2"), _address("3")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.engine_address = engine
+    hub.configured = True
+    hub.reward_escrow = 1000
+    hub.bond_escrow = 100
+    dossier = _base_dossier(sponsor, researcher)
+    dossier["closes_at"] = "50"  # already elapsed by the time the verdict lands
+    dossier["stage_deadline"] = "99999999999"
+    dossier["evidence"] = [_evidence("note-1")]
+    submission = _submission(researcher, "VERDICT_PENDING")
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions[submission["id"]] = json.dumps(submission)
+
+    direct_vm.warp("1970-01-01T00:16:40Z")  # 1000s: past closes_at
+    direct_vm.sender = bytes.fromhex(engine[2:])
+    result = {"outcome": "POSITION_A", "decisive_ids": ["note-1"], "rules_root": dossier["rules_root"],
+              "manifest_root": dossier["manifest_root"], "counterfactual_outcome": "UNRESOLVED",
+              "contribution_required": True, "basis": "decisive despite queue delay"}
+    hub.record_verdict("note-1", json.dumps(result))
+
+    final_dossier = hub.get_dossier(dossier["id"])
+    final_submission = hub.get_submission("note-1")
+    assert final_dossier["status"] == "RESOLVED"
+    assert final_dossier["winner"] == researcher
+    assert final_submission["status"] == "DECISIVE"
+    # Full reward plus the returned bond, exactly as if closure had not yet happened.
+    assert hub.get_credit(researcher) == "1100"
+    assert int(hub.reward_escrow) == 0
+    assert int(hub.bond_escrow) == 0
+
+
+def test_genuine_stage_timeout_after_closes_at_still_refunds_researcher_not_sponsor(
+    direct_vm, direct_deploy
+):
+    """Distinguish the two kinds of 'late': closes_at alone never penalizes a
+    queued submission, but a genuine stage timeout (the worker itself never
+    responded within its own deadline) is a different, already-fair outcome
+    that refunds the researcher -- and the two must never compete for the
+    same submission. A callback arriving after the stage deadline is
+    rejected regardless of closes_at; only expire_stage may act."""
+    witness, sponsor, researcher = _address("9"), _address("1"), _address("2")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.witness_address = witness
+    hub.configured = True
+    dossier = _base_dossier(sponsor, researcher)
+    dossier["closes_at"] = "50"
+    dossier["stage_deadline"] = "100"  # both deadlines elapsed together
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions["note-1"] = json.dumps({**_submission(researcher), "status": "WITNESS_PENDING"})
+    hub.bond_escrow = 100
+
+    direct_vm.warp("1970-01-01T00:01:41Z")  # 101s: past both closes_at and stage_deadline
+    direct_vm.sender = bytes.fromhex(witness[2:])
+    with direct_vm.expect_revert("semantic stage deadline elapsed; call expire_stage"):
+        hub.record_attestation("note-1", json.dumps(_attested_result(hub, "https://example.test/a", "x")))
+    assert hub.get_submission("note-1")["status"] == "WITNESS_PENDING"
+
+    hub.expire_stage(dossier["id"])
+    assert hub.get_submission("note-1")["status"] == "INCONCLUSIVE_TIMEOUT"
+    assert hub.get_credit(researcher) == "100"
+    assert hub.get_credit(sponsor) == "0"
+
+
+def test_fifo_queue_of_submissions_disclosed_before_closure_drains_fairly(direct_vm, direct_deploy):
+    """Two submissions disclosed before closes_at but still queued when it
+    elapses: the head is witnessed and settled on its merits, and the queue
+    then correctly advances to the next submission, all without either
+    being penalized for closure timing."""
+    witness, engine, sponsor, researcher_a, researcher_b = _address("9"), _address("8"), _address("1"), _address("2"), _address("3")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.witness_address = witness
+    hub.engine_address = engine
+    hub.configured = True
+    dossier = _base_dossier(sponsor, researcher_a)
+    dossier["closes_at"] = "50"
+    dossier["stage_deadline"] = "99999999999"
+    dossier["active_ids"] = ["note-1", "note-2"]
+    dossier["queue"] = ["note-1", "note-2"]
+    dossier["submission_ids"] = ["note-1", "note-2"]
+    dossier["evidence"] = []  # attestation below appends its own real record for note-1
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.submissions["note-1"] = json.dumps({**_submission(researcher_a), "status": "WITNESS_PENDING",
+                                            "url": "https://example.test/a", "claim": "claim a"})
+    hub.submissions["note-2"] = json.dumps({"id": "note-2", "dossier_id": dossier["id"],
+        "researcher": researcher_b, "status": "QUEUED", "bond_atto": "100", "bond_released": False,
+        "url": "https://example.test/b", "claim": "claim b"})
+    hub.bond_escrow = 200
+
+    direct_vm.warp("1970-01-01T00:16:40Z")  # 1000s: past closes_at, queue still draining
+    direct_vm.sender = bytes.fromhex(witness[2:])
+    hub.record_attestation("note-1", json.dumps(_attested_result(hub, "https://example.test/a", "claim a")))
+    assert hub.get_submission("note-1")["status"] == "VERDICT_PENDING"
+
+    # A non-decisive verdict refunds note-1 and must advance the queue to note-2.
+    engine_result = {"outcome": "UNRESOLVED", "sufficient": False, "decisive_ids": [],
+        "basis": "non-decisive", "basis_digest": "c" * 64, "rules_root": dossier["rules_root"],
+        "manifest_root": hub.get_dossier(dossier["id"])["manifest_root"],
+        "counterfactual_outcome": "", "contribution_required": False}
+    direct_vm.sender = bytes.fromhex(engine[2:])
+    hub.record_verdict("note-1", json.dumps(engine_result))
+
+    assert hub.get_submission("note-1")["status"] == "ATTESTED_NON_DECISIVE"
+    assert hub.get_credit(researcher_a) == "100"
+    final_dossier = hub.get_dossier(dossier["id"])
+    assert final_dossier["status"] == "OPEN"
+    assert final_dossier["queue"] == ["note-2"]
+    assert hub.get_submission("note-2")["status"] == "WITNESS_PENDING"
+    assert final_dossier["pending_id"] == "note-2"
 
 
 def test_attestation_valid_treats_content_addressed_and_direct_response_as_distinct(
@@ -650,3 +795,64 @@ def test_attestation_valid_treats_content_addressed_and_direct_response_as_disti
     assert check(provenance_status="VERIFIED_DIRECT_RESPONSE", transport_origin_verified=False) is False
     assert check(provenance_status="VERIFIED_CONTENT_ADDRESSED_ORIGIN", transport_origin_verified=True) is False
     assert check(provenance_status="UNVERIFIED_RESPONSE_ORIGIN", transport_origin_verified=True) is False
+
+
+def test_misleading_attested_claim_with_quote_absent_from_body_is_rejected(direct_vm, direct_deploy):
+    """Authenticated source bytes are not the same thing as an independently
+    verified claim: a document that was legitimately and correctly fetched
+    and hashed does not by itself establish anything. If the model claims
+    ATTESTED but its support_quote is not actually present verbatim in the
+    fetched bytes, the contract must force REJECTED regardless of whatever
+    booleans or basis prose the model returned."""
+    # GenVM's current web response never exposes a final URL (its Response
+    # type carries only status/headers/body), so admissible provenance
+    # requires the immutable content-addressed GitHub allowlist even in
+    # this harness -- exactly as on the real network.
+    hub = _address("9")
+    url = "https://raw.githubusercontent.com/test-org/test-repo/" + "a" * 40 + "/FILE"
+    witness = direct_deploy(WITNESS, hub)
+    direct_vm.sender = bytes.fromhex(hub[2:])
+    body = "The document discusses an unrelated matter and never states the claimed fact."
+    direct_vm.mock_web(re.escape(url), {"status": 200, "body": body})
+    direct_vm.mock_llm("NOEMA_SOURCE_WITNESS_V1", json.dumps({
+        "same_subject": True, "policy_compliant": True, "claim_supported": True,
+        "time_aligned": True, "materially_new": True, "internally_consistent": True,
+        "support_quote": "This exact sentence never appears in the fetched document.",
+        "basis": "The model incorrectly claims the document supports the fact."}))
+
+    witness.attest("req-1", hub, "question", "rule", "policy", "[]", url, "the claimed fact")
+
+    record = witness.get_record("req-1")
+    assert record["status"] == "REJECTED"
+    for field in ("same_subject", "policy_compliant", "claim_supported", "time_aligned",
+                  "materially_new", "internally_consistent"):
+        assert record[field] is False
+    assert record["support_quote"] == ""
+    assert record["support_digest"] == ""
+    # The byte-level facts are still recorded and correct, even though the
+    # semantic claim they were paired with was rejected.
+    assert record["content_digest"] == hashlib.sha256(body.encode()).hexdigest()
+    assert record["http_status"] == 200
+
+
+def test_attested_claim_with_quote_present_in_body_is_accepted(direct_vm, direct_deploy):
+    """Positive control for the above: when the quoted passage genuinely is
+    present verbatim, the same pipeline accepts it."""
+    hub = _address("9")
+    url = "https://raw.githubusercontent.com/test-org/test-repo/" + "b" * 40 + "/FILE"
+    witness = direct_deploy(WITNESS, hub)
+    direct_vm.sender = bytes.fromhex(hub[2:])
+    body = "Preamble. The exact fact in question is clearly true. Trailer."
+    direct_vm.mock_web(re.escape(url), {"status": 200, "body": body})
+    direct_vm.mock_llm("NOEMA_SOURCE_WITNESS_V1", json.dumps({
+        "same_subject": True, "policy_compliant": True, "claim_supported": True,
+        "time_aligned": True, "materially_new": True, "internally_consistent": True,
+        "support_quote": "The exact fact in question is clearly true.",
+        "basis": "The document states the fact verbatim."}))
+
+    witness.attest("req-2", hub, "question", "rule", "policy", "[]", url, "the exact fact")
+
+    record = witness.get_record("req-2")
+    assert record["status"] == "ATTESTED"
+    assert record["support_quote"] == "The exact fact in question is clearly true."
+    assert record["support_digest"] == hashlib.sha256(record["support_quote"].encode()).hexdigest()
