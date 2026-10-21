@@ -56,21 +56,25 @@ This reproduces the identical check this document asks for — it does not requi
 
 ## Current source-matched StudioNet release
 
-[`deployments/studionet.json`](../deployments/studionet.json) records a clean StudioNet `61999` deployment from commit `2391ac15d210e8d505cb7bd3c8e08d73788883b3`. The deployer retrieved each deployed contract through GenLayerJS `getContractCode`, required SHA-256 equality with the checked-in source, and checked finalized execution before writing the manifest.
+[`deployments/studionet.json`](../deployments/studionet.json) records a clean StudioNet `61999` deployment from commit `396ec24b77f5e635df6a1cfb962f4ad128745420`. The deployer retrieved each deployed contract through GenLayerJS `getContractCode`, required SHA-256 equality with the checked-in source, and checked finalized execution before writing the manifest.
 
 | Contract | Address | Deployed source SHA-256 |
 |---|---|---|
-| NoemaHub | `0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4` | `4beaa1487527b6671d14ecdaacc8273ad577a806b3769f85163d24222b1449d0` |
-| SourceWitness | `0x9D2CF136821F01369fbBc462F5fE868670c92785` | `ba20fe8715ee1ad1eecd8e6ead0c0ff3f4d58d0d640dc1b88e2dd2e4de06f713` |
-| VerdictEngine | `0x22C980402f1bF4D15333aF4CE5002A3f19DC9eA9` | `eb5373a68b165172c18433bb10c48c864e8ccdba935fb64fbd94cfc06a884e9a` |
+| NoemaHub | `0xB300efF2985bFd06d01D014c8f9EFD502726D76C` | `8d3da97c52df39ced74c5b67fd139daddba2a428649fab81ac4a5dd08ba5d53a` |
+| SourceWitness | `0x84aaab3A1e777F119ac7d3267F0765f647D5d4E0` | `3dde4ee3cc9a6948e0496876e76579b7ea72eecd7a86dfe539148421aa3e8161` |
+| VerdictEngine | `0x0319324A6157DE1b6385DcCd7115593a9D964c72` | `eb5373a68b165172c18433bb10c48c864e8ccdba935fb64fbd94cfc06a884e9a` |
 
-Deployment transactions are `0x8fbb85ace3d58ec90b4eaaa1d89e3bae77699cbeb4fc8abba6d35c6cfb0d57ca`, `0xcae8b91b3d1d86a5e36ab649250055e4e55c05845e50295950ad1e5a8c20b40a`, and `0x6a64467cbabe93f52479eafe977f0d5356f3f453d04e3135115352b5a6fbbb73`; the immutable worker binding is `0x61200c1f911a2be12ba93a48c5c1080bfac976b46904f64de182886d603ff532`.
+Deployment transactions are `0x408bd00c3dc8d964f308af69a9af37546f7f543a2316c0c6047875459c4825d2`, `0x74c0f13cfd62a7358b2ec0c849a7cfbca3b329897e32863884bdc42804a05145`, and `0xa466ee5774963e0f9d8612e3ad693c25b326536d71b30ce4af38f13013a4abdd`; the immutable worker binding is `0xa23d43c84a09556020abf15b1c27391f417a21994b2934e552a0e346ed292f60`.
+
+This supersedes the prior release (commit `2391ac15d210e8d505cb7bd3c8e08d73788883b3`, Hub `0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4`), deployed to carry forward the deadline-exclusivity, exhaustion-economics, and provenance-conflation fixes landed after that release. The production `neoma-hub` Vercel project's contract-address environment variables were updated to this release and redeployed as `dpl_BCuXM8LYuggQ3J2KXW6WZ2vbtAMo`; its `/api/health` confirms chain `61999`, this Hub address, reachable RPC, and available Hub code.
 
 ## Fresh StudioNet lifecycle
 
-The `freshRedeploymentRun` in [`deployments/e2e-studionet.json`](../deployments/e2e-studionet.json) is the current-release CLI/GenLayerJS record. It resolved `noema-1` as `POSITION_A` using a frozen rule root and a deterministic, authenticated-support closure basis; removing that support makes the result unresolved.
+The `freshRedeploymentRun` in [`deployments/e2e-studionet.json`](../deployments/e2e-studionet.json) is the current-release CLI/GenLayerJS record, produced in the same run that deployed the contracts above (`run-studionet-e2e.mjs` with `NOEMA_FORCE_REDEPLOY=1`). It resolved `noema-1` as `POSITION_A` using a frozen rule root and a deterministic, authenticated-support closure basis; removing that support makes the result unresolved.
 
-The researcher received `1100000000000000` atto GEN (`0.0011 GEN`). Withdrawal parent `0xa878680d9a22f17e2fc9ff51053660a053e3e32db01474e2a1d0507544b9b4a0` and finalized child `0x1a3fc2e900400c3a8f9961f01621901ff2afa7b91fda2a137dba90e456cc8d63` were reconciled as `DELIVERED`; the Hub credit changed from that amount to zero and the recipient balance rose from `452499999967045000` to `453599999967045000` atto GEN. The record also proves duplicate withdrawal rejection, zero residual sponsor balance, accounting, and solvency.
+The researcher received `1100000000000000` atto GEN (`0.0011 GEN`). Withdrawal parent `0xda427eab6af6a89ff14844eb58be344d253b1191a4f590a74630ad9bda2fd15d` and finalized child `0x8e521703e4e5ce370f38650df4772784dd73f798e8771737cbe28877b2f260fc` were reconciled as `DELIVERED` via `0x34f5945541033cc2b8aa94d64afd8adf9c77861081adfab9b7ac4c6cdf3a94da`; the Hub credit changed from that amount to zero and the recipient balance rose from `999000000999876277585181587999999998992` to `999000000999876277585182687999999998992` atto GEN, an exact match for the credited amount. The record also proves duplicate withdrawal rejection, zero residual sponsor balance, and `accounting_ok`/`solvent_ok` both before and after the withdrawal. The ephemeral deployer/sponsor key's leftover funds were swept back to the throwaway account on completion, and its temporary key material was removed rather than persisted.
+
+A browser check of the redeployed production site against this exact Hub confirmed the homepage, `/field` listing, the `noema-1` dossier detail page (showing the frozen rules root, final manifest root, both evidence records' exact support quotes, byte counts, and verified content-addressed origin labels), the dossier-creation form and its two-baseline autofill, `/method`, and `/vault` all render correctly. Driving the actual seal/reveal/withdraw signing flow through the browser UI was not performed for this release, since the sandboxed test browser has no injected wallet extension; the CLI/GenLayerJS run above is the authoritative on-chain proof for that lifecycle, and the frontend has been confirmed to read and display its exact resulting state correctly.
 
 The timeout artifact [`deployments/studionet-timeout-rollback.json`](../deployments/studionet-timeout-rollback.json) is retained as a real asynchronous StudioNet timeout demonstration, but it belongs to an earlier deployment and is not presented as current-release evidence. Likewise, [`deployments/studionet-browser-wallet-verification.json`](../deployments/studionet-browser-wallet-verification.json) is historical only.
 

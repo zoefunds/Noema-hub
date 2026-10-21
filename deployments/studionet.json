@@ -2,40 +2,40 @@
   "product": "Noema",
   "network": "studionet",
   "chainId": 61999,
-  "sourceCommit": "2391ac15d210e8d505cb7bd3c8e08d73788883b3",
+  "sourceCommit": "396ec24b77f5e635df6a1cfb962f4ad128745420",
   "nativePayoutsEnabled": true,
   "rpc": "https://studio.genlayer.com/api",
   "explorer": "https://explorer-studio.genlayer.com",
-  "deployedAt": "2026-10-20T17:38:25.989Z",
+  "deployedAt": "2026-10-21T00:08:56.932Z",
   "deployedSourceVerification": "Exact source equality verified through GenLayerJS getContractCode for all three contracts.",
   "contracts": {
     "hub": {
-      "address": "0xcBcfF1dc3FD979fb48d65E078Ca7a8fcf98483e4",
-      "txHash": "0x8fbb85ace3d58ec90b4eaaa1d89e3bae77699cbeb4fc8abba6d35c6cfb0d57ca",
+      "address": "0xB300efF2985bFd06d01D014c8f9EFD502726D76C",
+      "txHash": "0x408bd00c3dc8d964f308af69a9af37546f7f543a2316c0c6047875459c4825d2",
       "sourceFile": "contracts/noema_hub.py",
-      "sourceSha256": "4beaa1487527b6671d14ecdaacc8273ad577a806b3769f85163d24222b1449d0",
-      "retrievedSourceSha256": "4beaa1487527b6671d14ecdaacc8273ad577a806b3769f85163d24222b1449d0",
+      "sourceSha256": "8d3da97c52df39ced74c5b67fd139daddba2a428649fab81ac4a5dd08ba5d53a",
+      "retrievedSourceSha256": "8d3da97c52df39ced74c5b67fd139daddba2a428649fab81ac4a5dd08ba5d53a",
       "deployedSourceMatchesLocal": true,
       "deployedSourceVerification": "GenLayerJS getContractCode exact SHA-256 comparison"
     },
     "witness": {
-      "address": "0x9D2CF136821F01369fbBc462F5fE868670c92785",
-      "txHash": "0xcae8b91b3d1d86a5e36ab649250055e4e55c05845e50295950ad1e5a8c20b40a",
+      "address": "0x84aaab3A1e777F119ac7d3267F0765f647D5d4E0",
+      "txHash": "0x74c0f13cfd62a7358b2ec0c849a7cfbca3b329897e32863884bdc42804a05145",
       "sourceFile": "contracts/source_witness.py",
-      "sourceSha256": "ba20fe8715ee1ad1eecd8e6ead0c0ff3f4d58d0d640dc1b88e2dd2e4de06f713",
-      "retrievedSourceSha256": "ba20fe8715ee1ad1eecd8e6ead0c0ff3f4d58d0d640dc1b88e2dd2e4de06f713",
+      "sourceSha256": "3dde4ee3cc9a6948e0496876e76579b7ea72eecd7a86dfe539148421aa3e8161",
+      "retrievedSourceSha256": "3dde4ee3cc9a6948e0496876e76579b7ea72eecd7a86dfe539148421aa3e8161",
       "deployedSourceMatchesLocal": true,
       "deployedSourceVerification": "GenLayerJS getContractCode exact SHA-256 comparison"
     },
     "engine": {
-      "address": "0x22C980402f1bF4D15333aF4CE5002A3f19DC9eA9",
-      "txHash": "0x6a64467cbabe93f52479eafe977f0d5356f3f453d04e3135115352b5a6fbbb73",
+      "address": "0x0319324A6157DE1b6385DcCd7115593a9D964c72",
+      "txHash": "0xa466ee5774963e0f9d8612e3ad693c25b326536d71b30ce4af38f13013a4abdd",
       "sourceFile": "contracts/verdict_engine.py",
       "sourceSha256": "eb5373a68b165172c18433bb10c48c864e8ccdba935fb64fbd94cfc06a884e9a",
       "retrievedSourceSha256": "eb5373a68b165172c18433bb10c48c864e8ccdba935fb64fbd94cfc06a884e9a",
       "deployedSourceMatchesLocal": true,
       "deployedSourceVerification": "GenLayerJS getContractCode exact SHA-256 comparison"
     },
-    "configureTxHash": "0x61200c1f911a2be12ba93a48c5c1080bfac976b46904f64de182886d603ff532"
+    "configureTxHash": "0xa23d43c84a09556020abf15b1c27391f417a21994b2934e552a0e346ed292f60"
   }
 }
