@@ -49,7 +49,7 @@ GenVM's current web response type (`status`, `headers`, `body` only) never expos
 
 ## Denial of service controls
 
-All user text, arrays, pages, queues, lifetime records and retained evidence are bounded. Adjudication is FIFO and serial; a callback for anything but the current queue head is rejected outright, so out-of-order processing cannot be used to reorder payout priority. Each nondeterministic stage has a deadline and public recovery call, and that deadline is mutually exclusive with the matching worker callback — a late callback can never race `expire_stage` for the same outcome. A timed-out verdict removes its tentative candidate before the queue advances. Exhausting the lifetime-submission bound is deterred economically rather than for free: every no-evidence outcome (including source unavailability) forfeits its bond to the sponsor, and the cap is scoped per dossier, so one griefed dossier never blocks research on any other. Exhausting the evidence bound terminates with a sponsor refund instead of trapping escrow.
+All user text, arrays, pages, queues, lifetime records and retained evidence are bounded. Adjudication is FIFO and serial; a callback for anything but the current queue head is rejected outright, so out-of-order processing cannot be used to reorder payout priority. Each nondeterministic stage has a deadline and public recovery call, and that deadline is mutually exclusive with the matching worker callback — a late callback can never race `expire_stage` for the same outcome. A timed-out verdict removes its tentative candidate before the queue advances. Exhausting the lifetime-submission bound is deterred economically rather than for free: every no-evidence outcome (including source unavailability) forfeits its bond to the sponsor, and the cap is scoped per dossier, so one griefed dossier never blocks research on any other. The cap counts attempts, not distinct wallets, so Sybil-splitting an exhaustion attack across many addresses never lowers its total cost — `test_multi_wallet_exhaustion_requires_full_bond_per_attempt_and_caps_bound_displacement` demonstrates this against the live contract. Exhausting the evidence bound terminates with a sponsor refund instead of trapping escrow.
 
 ## Deployment checklist
 
@@ -60,7 +60,7 @@ All user text, arrays, pages, queues, lifetime records and retained evidence are
 - inspect all three schemas;
 - verify `accounting_ok` and `solvent_ok` before and after an end-to-end flow;
 - verify the finalized outgoing child through canonical StudioNet RPC under validator replay, recipient balance increase, Hub credit readback, single-use receipt pair, and duplicate-withdraw protection before reporting a payout as successful;
-- execute the conflicting-evidence, candidate-timeout, failed-receipt recredit, receipt-replay, and duplicate-credit state-transition tests;
+- execute the conflicting-evidence, candidate-timeout, deadline-exclusivity, queue-delay-fairness, multi-wallet-exhaustion, misleading-record, failed-receipt recredit, receipt-replay, and duplicate-credit state-transition tests;
 - exercise a real asynchronous stage timeout and verify exact credit restoration, cleared pending state, and healthy accounting;
 - publish addresses and deployment transaction hashes;
 - never label a transport redirect chain as verified.
