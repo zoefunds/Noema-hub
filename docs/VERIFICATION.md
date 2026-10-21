@@ -80,9 +80,9 @@ The timeout artifact [`deployments/studionet-timeout-rollback.json`](../deployme
 
 ## Browser-wallet status
 
-The current production site is [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_EFmyYfwdwc4Nszw9U1U7m2PUg8qy`, configured for the current Hub. A browser-wallet account successfully opened current-Hub dossier `noema-2` in finalized transaction `0xcbff89cf95f8886ef66b8c3365e03abef0e7da8c8c07ff3afb1877d0cd3c8bf9`. A later browser audit caught a stale pending seal request before signing; it was canceled, and the actual `neoma-hub` project configuration was corrected and redeployed.
+The current production site is [neoma-hub.vercel.app](https://neoma-hub.vercel.app), deployment `dpl_BCuXM8LYuggQ3J2KXW6WZ2vbtAMo`, configured for the current Hub `0xB300efF2985bFd06d01D014c8f9EFD502726D76C`. No browser-wallet-driven dossier has been opened against this Hub yet: the only on-chain activity so far (`noema-1`, resolved `POSITION_A`) was driven by the CLI/GenLayerJS acceptance harness, documented above, not clicked through the browser UI.
 
-That browser-originated dossier is still `OPEN`. A current-release browser seal, reveal, witness, verdict, reward, withdrawal, and reconciliation sequence has **not** been claimed or recorded. Completing it requires the wallet holder's just-in-time confirmation for the real bond and withdrawal transactions.
+A browser-wallet account previously opened dossier `noema-2` (finalized transaction `0xcbff89cf95f8886ef66b8c3365e03abef0e7da8c8c07ff3afb1877d0cd3c8bf9`) against the **prior** Hub, which this release supersedes; that dossier and its contract are no longer bound to the production frontend and are retained only as historical evidence in [`deployments/studionet-browser-wallet-verification.json`](../deployments/studionet-browser-wallet-verification.json). A current-release browser seal, reveal, witness, verdict, reward, withdrawal, and reconciliation sequence, clicked through the live UI with a real wallet, has **not** been recorded. Completing it requires the wallet holder's just-in-time confirmation for the real bond and withdrawal transactions, and a browser pane with a real injected wallet extension, neither of which this document's automated checks have access to.
 
 ## Security boundaries
 
