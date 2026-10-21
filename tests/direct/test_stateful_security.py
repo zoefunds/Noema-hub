@@ -242,8 +242,10 @@ def _pending_withdrawal(hub, direct_vm, recipient, amount):
     return withdrawal_id, item
 
 
-def test_delivered_receipt_settles_withdrawal_without_recrediting(direct_vm, direct_deploy):
-    """A genuinely successful payout must clear pending_outbound and never touch credits."""
+def test_delivered_receipt_clears_pending_and_allows_a_later_earned_credit_to_withdraw(
+    direct_vm, direct_deploy
+):
+    """Delivery must terminally clear the outbound lock, not merely look paid off-chain."""
     recipient = _address("4")
     parent_tx, child_tx = "0x" + "7" * 64, "0x" + "8" * 64
     hub = direct_deploy(HUB, "", "", True)
@@ -263,6 +265,23 @@ def test_delivered_receipt_settles_withdrawal_without_recrediting(direct_vm, dir
         assert hub.get_pending_outbound(recipient) == "0"
         assert hub.consumed_payout_receipts[receipt_key] == withdrawal_id
         assert int(hub.withdrawn) == 500
+
+        # A later reward can now use the same wallet.  This is the regression
+        # boundary the Vault relies on after it submits reconcile_withdrawal:
+        # before reconciliation, withdraw() rejects this exact transition.
+        address = hub._instance.withdraw.__globals__["Address"](recipient)
+        hub.credits[address] = 250
+        hub.claimable = 250
+        direct_vm.deal(direct_vm._contract_address, 250)
+        direct_vm.sender = bytes.fromhex(recipient[2:])
+        hub.withdraw()
+        next_withdrawal = hub.get_latest_withdrawal(recipient)
+        assert next_withdrawal["id"] != withdrawal_id
+        assert next_withdrawal["status"] == "PENDING"
+        assert next_withdrawal["amount"] == "250"
+        assert hub.get_credit(recipient) == "0"
+        assert hub.get_pending_outbound(recipient) == "250"
+        assert int(hub.pending_outbound_total) == 250
     finally:
         globals_["_verify_payout_receipts"] = original
 

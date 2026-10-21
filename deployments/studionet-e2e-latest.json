@@ -1,4 +1,8 @@
 {
+  "artifactStatus": "HISTORICAL_SUPERSEDED",
+  "canonicalDeploymentManifest": "deployments/studionet.json",
+  "supersededByHub": "0xD3B1A426bFD37f69a968e8Db2168edBA4E5854B1",
+  "note": "This retained October 20 acceptance record targets the preceding Hub release. It is not the current deployment manifest; use deployments/studionet.json for the canonical StudioNet contract addresses and source hashes.",
   "network": "StudioNet",
   "chainId": 61999,
   "runStatus": "COMPLETE",

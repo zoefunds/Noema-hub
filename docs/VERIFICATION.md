@@ -17,7 +17,7 @@ The current local release check passed 80 direct contract tests, 4 sponsor-key s
 Nine stateful tests in `tests/direct/test_stateful_security.py` were added to close gaps the prior suite left between "the helper function behaves correctly in isolation" and "the deployed contract method behaves correctly end to end":
 
 - **All four `reconcile_withdrawal` outcomes are now run through the live contract method**, not just the `_payout_receipt_outcome` helper. Previously only `FAILED` (recredit) and its replay were exercised statefully:
-  - `test_delivered_receipt_settles_withdrawal_without_recrediting` — a genuinely successful payout clears `pending_outbound` and the withdrawal is marked `DELIVERED` without ever touching `credits` (proves the happy path cannot double-pay).
+  - `test_delivered_receipt_clears_pending_and_allows_a_later_earned_credit_to_withdraw` — a genuinely successful payout clears `pending_outbound`, marks the withdrawal `DELIVERED` without recrediting it, and then proves a later earned credit can open a distinct subsequent withdrawal.
   - `test_forged_or_mismatched_receipt_is_rejected_and_leaves_state_unchanged` — a receipt pair that fails consensus linkage (`INVALID`) reverts and leaves the withdrawal `PENDING`, `pending_outbound` untouched, and `consumed_payout_receipts` unmarked, so a legitimate retry is still possible.
   - `test_unfinalized_receipt_is_rejected_without_mutating_state` — a receipt whose child has not finalized (`PENDING`) reverts without mutating any state.
   - `test_unavailable_rpc_lookup_is_rejected_without_mutating_state` — a StudioNet RPC read failure (`UNAVAILABLE`) is rejected as retryable rather than silently treated as settled.

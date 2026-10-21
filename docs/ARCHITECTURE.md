@@ -83,7 +83,7 @@ Any caller can execute `expire_stage` after its deadline. Baseline timeouts refu
 
 ## Payout finality and recovery
 
-`withdraw` moves one recipient's credit into a serialized pending-outbound record before emitting the external value message. Neither the browser nor the project-controlled Vercel receipt projection can settle that record. `reconcile_withdrawal` independently retrieves the exact parent and child transactions from canonical StudioNet RPC under validator replay and requires finalized status, exact linkage, Hub sender, recipient, amount, withdrawal calldata, creation second, and boolean `value_credited`.
+`withdraw` moves one recipient's credit into a serialized pending-outbound record before emitting the external value message. A browser-side receipt check or the project-controlled Vercel receipt projection cannot settle that record by itself. After it observes a matching finalized child, the Vault submits `reconcile_withdrawal`; the Hub independently retrieves the exact parent and child transactions from canonical StudioNet RPC under validator replay and requires finalized status, exact linkage, Hub sender, recipient, amount, withdrawal calldata, creation second, and boolean `value_credited`.
 
 A delivered child consumes its parent/child receipt pair and terminates the withdrawal. A finalized failed child consumes the same pair, restores credit once, and records any newly realized backing deficit. The recipient cannot initiate another payout while an earlier outbound value remains pending, and a consumed pair cannot settle another withdrawal. This keeps chain delivery evidence and Hub accounting in one authenticated state transition.
 

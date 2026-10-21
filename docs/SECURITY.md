@@ -59,7 +59,7 @@ All user text, arrays, pages, queues, lifetime records and retained evidence are
 - configure the Hub once with both worker addresses;
 - inspect all three schemas;
 - verify `accounting_ok` and `solvent_ok` before and after an end-to-end flow;
-- verify the finalized outgoing child through canonical StudioNet RPC under validator replay, recipient balance increase, Hub credit readback, single-use receipt pair, and duplicate-withdraw protection before reporting a payout as successful;
+- have the Vault submit `reconcile_withdrawal` after it observes the finalized outgoing child, then verify the Hub's `DELIVERED` state through canonical StudioNet RPC under validator replay, recipient balance increase, Hub credit readback, single-use receipt pair, and duplicate-withdraw protection before reporting a payout as successful;
 - execute the conflicting-evidence, candidate-timeout, deadline-exclusivity, queue-delay-fairness, multi-wallet-exhaustion, misleading-record, failed-receipt recredit, receipt-replay, and duplicate-credit state-transition tests;
 - exercise a real asynchronous stage timeout and verify exact credit restoration, cleared pending state, and healthy accounting;
 - publish addresses and deployment transaction hashes;
