@@ -856,3 +856,57 @@ def test_attested_claim_with_quote_present_in_body_is_accepted(direct_vm, direct
     assert record["status"] == "ATTESTED"
     assert record["support_quote"] == "The exact fact in question is clearly true."
     assert record["support_digest"] == hashlib.sha256(record["support_quote"].encode()).hexdigest()
+
+
+def test_multi_wallet_exhaustion_requires_full_bond_per_attempt_and_caps_bound_displacement(
+    direct_vm, direct_deploy
+):
+    """The permanent lifetime-submission cap is identity-blind: it counts
+    attempts, not distinct wallets, so Sybil-splitting an exhaustion attack
+    across many addresses buys nothing -- each attacker still must post the
+    dossier's full bond for every attempt, the aggregate GEN at risk to
+    exhaust one dossier is unchanged, and once the cap is genuinely full it
+    displaces the next seal_disclosure equally regardless of who sends it or
+    how many distinct wallets came before, never singling out one identity."""
+    sponsor = _address("1")
+    hub = direct_deploy(HUB, "", "", True)
+    hub.configured = True
+    dossier = _base_dossier(sponsor, _address("2"))
+    dossier["bond_atto"] = "100"
+    dossier["closes_at"] = "99999999999"
+    # Simulate 71 distinct attacker wallets having already each posted and
+    # forfeited their own bond (e.g. REJECTED/RETRYABLE outcomes): the
+    # lifetime counter is permanently consumed even though none are still
+    # active, which is exactly what makes the cap identity-blind.
+    dossier["submission_ids"] = [f"attacker-{i}" for i in range(71)]
+    dossier["active_ids"] = []
+    dossier["queue"] = []
+    dossier["pending_id"] = ""
+    hub.dossiers[dossier["id"]] = json.dumps(dossier)
+    hub.bond_escrow = 0
+    hub.deposited = 0
+
+    # The 72nd distinct wallet (attacker or legitimate researcher -- the
+    # protocol cannot tell and does not need to) still gets in, and must
+    # pay the full real bond to do so.
+    last_slot_wallet = _address("9")
+    direct_vm.sender = bytes.fromhex(last_slot_wallet[2:])
+    direct_vm.value = 100
+    commitment_72 = "7" * 64
+    hub.seal_disclosure(dossier["id"], commitment_72)
+    assert int(hub.bond_escrow) == 100
+    assert int(hub.deposited) == 100
+    assert len(hub.get_dossier(dossier["id"])["submission_ids"]) == 72
+
+    # A 73rd distinct wallet -- a further attacker or a genuinely legitimate
+    # researcher, identically -- is rejected before any bond is accepted.
+    displaced_wallet = _address("4")
+    direct_vm.sender = bytes.fromhex(displaced_wallet[2:])
+    direct_vm.value = 100
+    with direct_vm.expect_revert("bounded submission capacity reached"):
+        hub.seal_disclosure(dossier["id"], "8" * 64)
+    # The displaced wallet never actually paid anything: the attempt cost
+    # it nothing beyond gas, and the Hub's accounting is untouched.
+    assert int(hub.bond_escrow) == 100
+    assert int(hub.deposited) == 100
+    direct_vm.value = 0
